@@ -17,6 +17,7 @@ from modal_mcp.adapters.registry import bind_modal_adapter
 from modal_mcp.asgi import OriginGuard
 from modal_mcp.auth import build_auth
 from modal_mcp.config import Settings, assert_runtime_security, scrub_secret_env
+from modal_mcp.policy.engine import PolicyMiddleware
 
 ALL_TOOLSETS = frozenset(
     {
@@ -101,6 +102,7 @@ def create_mcp(
         lifespan=lifespan,
         auth=build_auth(resolved_settings),
     )
+    mcp.add_middleware(PolicyMiddleware(resolved_settings))
 
     disabled_toolsets = ALL_TOOLSETS - set(resolved_settings.modal_mcp_enabled_toolsets)
     if disabled_toolsets:

@@ -83,6 +83,8 @@ class ApprovalPayload(_TokenPayload):
     mcp_session_id: str
     auth_session_id: str
     nonce: str
+    nbf: int = 0
+    remote_mode: str | None = None
 
     @field_validator("target_refs", mode="before")
     @classmethod
@@ -254,6 +256,9 @@ def _decode_token[T: _TokenPayload](
     current_time = int(now if now is not None else time.time())
     if payload.exp <= current_time:
         msg = "token has expired"
+        raise ValueError(msg)
+    if getattr(payload, "nbf", 0) > current_time:
+        msg = "token is not yet valid"
         raise ValueError(msg)
 
     keys = _coerce_signing_keys(signing_keys)
