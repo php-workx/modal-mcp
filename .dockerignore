@@ -1,0 +1,12 @@
+.git
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.venv
+.serena
+.verk
+__pycache__
+*.pyc
+.agents
+.tickets
+.secrets
