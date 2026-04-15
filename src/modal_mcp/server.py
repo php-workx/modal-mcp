@@ -19,6 +19,7 @@ from modal_mcp.auth import build_auth
 from modal_mcp.config import Settings, assert_runtime_security, scrub_secret_env
 from modal_mcp.observability.audit import audit_sink_from_settings
 from modal_mcp.observability.logger import configure_logging
+from modal_mcp.observability.tracing import OtelMiddleware
 from modal_mcp.policy.engine import PolicyMiddleware
 
 ALL_TOOLSETS = frozenset(
@@ -105,6 +106,7 @@ def create_mcp(
         lifespan=lifespan,
         auth=build_auth(resolved_settings),
     )
+    mcp.add_middleware(OtelMiddleware(resolved_settings))
     mcp.add_middleware(
         PolicyMiddleware(
             resolved_settings,
