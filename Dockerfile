@@ -1,8 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-# TODO(mm-qjp0): replace this tag with the selected digest-pinned base before
-# release once the release pipeline owns base-image refreshes.
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim@sha256:804ddf3251a60bbf9c92e73b7566c40428d54d0e79d3428194edf40da6521286 AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

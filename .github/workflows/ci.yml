@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Run ruff lint
+        run: uv run ruff check .
+
+      - name: Run ruff format check
+        run: uv run ruff format --check .
+
+      - name: Run strict type check
+        run: uv run mypy --strict src
+
+      - name: Run tests with coverage
+        run: uv run pytest -q --cov=modal_mcp --cov-report=term-missing --cov-report=xml
+
+      - name: Run contract tests
+        run: uv run pytest -q tests/contract
+
+      - name: Run internal-API probe
+        run: uv run pytest -q tests/contract/test_modal_symbols.py
+
+      - name: Verify MCP schema snapshots
+        run: uv run python scripts/generate_schemas.py --check
