@@ -21,6 +21,7 @@ from modal_mcp.observability.audit import audit_sink_from_settings
 from modal_mcp.observability.logger import configure_logging
 from modal_mcp.observability.tracing import OtelMiddleware
 from modal_mcp.policy.engine import PolicyMiddleware
+from modal_mcp.toolsets import register_toolsets
 
 ALL_TOOLSETS = frozenset(
     {
@@ -113,6 +114,7 @@ def create_mcp(
             audit_sink=audit_sink_from_settings(resolved_settings),
         )
     )
+    register_toolsets(mcp, resolved_settings)
 
     disabled_toolsets = ALL_TOOLSETS - set(resolved_settings.modal_mcp_enabled_toolsets)
     if disabled_toolsets:

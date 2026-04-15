@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from modal_mcp.adapters.registry import get_modal_adapter
 from modal_mcp.asgi import OriginGuard
 from modal_mcp.config import Settings
+from modal_mcp.domain.models import App, Environment, Workspace
 from modal_mcp.server import create_asgi_app, create_mcp, fastmcp_lifespan
 
 
@@ -24,6 +26,43 @@ class FakeAdapter:
 
     async def aclose(self) -> None:
         self.closed = True
+
+    def whoami(self) -> Workspace:
+        return Workspace(
+            workspace_ref="mref1.workspace",
+            name="main",
+            source="local_profile",
+            current=True,
+        )
+
+    def list_workspaces(self) -> list[Workspace]:
+        return [self.whoami()]
+
+    def list_environments(self) -> list[Environment]:
+        return [
+            Environment(
+                environment_ref="mref1.env",
+                name="prod",
+                is_default=True,
+            )
+        ]
+
+    def get_environment(self, environment_name: str) -> Environment | None:
+        return self.list_environments()[0] if environment_name == "prod" else None
+
+    def list_apps(self, environment_name: str | None = None) -> list[App]:
+        del environment_name
+        return [
+            App(
+                app_ref="mref1.app",
+                name="api",
+                description="api service",
+                state="deployed",
+                created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                n_running_tasks=1,
+                environment_ref="mref1.env",
+            )
+        ]
 
 
 @pytest.fixture(autouse=True)
@@ -98,6 +137,34 @@ def test_create_asgi_app_mounts_fastmcp_with_origin_guard_first(
     assert mcp_app.state.path == "/mcp"
     assert any(middleware.cls is OriginGuard for middleware in mcp_app.user_middleware)
     assert app.router.lifespan_context is mcp_app.lifespan
+
+
+@pytest.mark.asyncio
+async def test_tools_list_exposes_read_only_tools_only(settings: Settings) -> None:
+    """Default tools/list contains read-only discovery and app tools only."""
+
+    mcp = create_mcp(settings)
+
+    tools = await mcp.list_tools(run_middleware=False)
+    names = {tool.name for tool in tools}
+
+    assert {
+        "modal_discovery_server_info",
+        "modal_whoami",
+        "modal_list_workspaces",
+        "modal_list_environments",
+        "modal_get_environment",
+        "modal_list_apps",
+        "modal_get_app",
+        "modal_list_app_deployments",
+        "modal_get_app_logs",
+    } <= names
+    assert "modal_stop_app" not in names
+    assert "modal_rollback_app" not in names
+    assert "modal_stop_container" not in names
+    assert "modal_terminate_sandbox" not in names
+    assert "modal_expert_execute" not in names
+    assert all(tool.annotations.readOnlyHint is True for tool in tools)
 
 
 def test_server_uses_registry_not_fastmcp_session_state() -> None:
