@@ -120,6 +120,25 @@ def test_hosted_debug_flags_fail_before_runtime() -> None:
         )
 
 
+def test_hosted_cli_fallback_flag_is_rejected_before_runtime() -> None:
+    """Hosted auth modes refuse the dead CLI fallback flag too."""
+
+    with pytest.raises(ValidationError, match="MODAL_MCP_CLI_FALLBACK"):
+        Settings(
+            modal_token_id=SecretStr("tid"),
+            modal_token_secret=SecretStr("tsecret"),
+            modal_mcp_allowed_origins=("https://mcp.example.com",),
+            modal_mcp_signing_keys=SecretStr("kid1:" + "a" * 64),
+            modal_mcp_auth_mode="hosted_oauth",
+            modal_mcp_public_origin="https://mcp.example.com",
+            modal_mcp_auth_issuer="https://issuer.example.com",
+            modal_mcp_auth_jwks_uri="https://issuer.example.com/jwks.json",
+            modal_mcp_auth_audience="modal-mcp",
+            modal_mcp_allowed_redirect_uris=("https://client.example.com/cb",),
+            modal_mcp_cli_fallback=True,
+        )
+
+
 @pytest.mark.parametrize(
     ("origin", "message"),
     [
