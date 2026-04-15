@@ -34,15 +34,15 @@
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -160,8 +160,8 @@
       },
       "serializer": null,
       "tags": [
-        "logs",
-        "apps"
+        "apps",
+        "logs"
       ],
       "task_config": {
         "mode": "forbidden",
@@ -187,15 +187,15 @@
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -324,8 +324,8 @@
       },
       "serializer": null,
       "tags": [
-        "logs",
-        "apps"
+        "apps",
+        "logs"
       ],
       "task_config": {
         "mode": "forbidden",
@@ -351,15 +351,15 @@
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -561,27 +561,27 @@
             },
             "required": [
               "app_ref",
-              "name",
-              "description",
-              "state",
               "created_at",
+              "description",
+              "environment_ref",
               "n_running_tasks",
-              "environment_ref"
+              "name",
+              "state"
             ],
             "type": "object"
           },
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -728,15 +728,15 @@
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -867,8 +867,8 @@
               }
             },
             "required": [
-              "source",
-              "message"
+              "message",
+              "source"
             ],
             "type": "object"
           },
@@ -898,11 +898,11 @@
               }
             },
             "required": [
+              "deduped_count",
               "error_signatures",
               "top_sources",
               "total_entries",
-              "truncated",
-              "deduped_count"
+              "truncated"
             ],
             "type": "object"
           },
@@ -1003,9 +1003,9 @@
           "format": {
             "default": "summary",
             "enum": [
-              "summary",
+              "both",
               "raw",
-              "both"
+              "summary"
             ],
             "type": "string"
           },
@@ -1118,8 +1118,8 @@
       },
       "serializer": null,
       "tags": [
-        "logs",
-        "apps"
+        "apps",
+        "logs"
       ],
       "task_config": {
         "mode": "forbidden",
@@ -1225,23 +1225,23 @@
             },
             "required": [
               "container_ref",
-              "task_id",
-              "state"
+              "state",
+              "task_id"
             ],
             "type": "object"
           },
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -1377,15 +1377,15 @@
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -1516,8 +1516,8 @@
               }
             },
             "required": [
-              "source",
-              "message"
+              "message",
+              "source"
             ],
             "type": "object"
           },
@@ -1547,11 +1547,11 @@
               }
             },
             "required": [
+              "deduped_count",
               "error_signatures",
               "top_sources",
               "total_entries",
-              "truncated",
-              "deduped_count"
+              "truncated"
             ],
             "type": "object"
           },
@@ -1747,8 +1747,8 @@
       },
       "serializer": null,
       "tags": [
-        "logs",
-        "containers"
+        "containers",
+        "logs"
       ],
       "task_config": {
         "mode": "forbidden",
@@ -1809,23 +1809,23 @@
             },
             "required": [
               "environment_ref",
-              "name",
-              "is_default"
+              "is_default",
+              "name"
             ],
             "type": "object"
           },
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -1961,15 +1961,15 @@
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -2068,9 +2068,9 @@
               }
             },
             "required": [
-              "sandbox_ref",
-              "sandbox_id",
               "created_at",
+              "sandbox_id",
+              "sandbox_ref",
               "status",
               "tags"
             ],
@@ -2170,15 +2170,15 @@
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -2234,8 +2234,8 @@
               }
             },
             "required": [
-              "stdout",
               "stderr",
+              "stdout",
               "truncated"
             ],
             "type": "object"
@@ -2391,11 +2391,11 @@
               }
             },
             "required": [
-              "vcs",
               "branch",
               "commit_hash",
               "commit_timestamp",
-              "dirty"
+              "dirty",
+              "vcs"
             ],
             "type": "object"
           },
@@ -2462,8 +2462,8 @@
               "status": {
                 "enum": [
                   "active",
-                  "superseded",
                   "rolled_back",
+                  "superseded",
                   "unknown"
                 ],
                 "type": "string"
@@ -2484,27 +2484,27 @@
               }
             },
             "required": [
-              "version",
-              "status",
-              "deployed_at",
               "client_version",
+              "deployed_at",
               "deployed_by",
-              "rollback_allowed"
+              "rollback_allowed",
+              "status",
+              "version"
             ],
             "type": "object"
           },
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -2717,27 +2717,27 @@
             },
             "required": [
               "app_ref",
-              "name",
-              "description",
-              "state",
               "created_at",
+              "description",
+              "environment_ref",
               "n_running_tasks",
-              "environment_ref"
+              "name",
+              "state"
             ],
             "type": "object"
           },
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -2987,23 +2987,23 @@
             },
             "required": [
               "container_ref",
-              "task_id",
-              "state"
+              "state",
+              "task_id"
             ],
             "type": "object"
           },
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -3219,23 +3219,23 @@
             },
             "required": [
               "environment_ref",
-              "name",
-              "is_default"
+              "is_default",
+              "name"
             ],
             "type": "object"
           },
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -3393,15 +3393,15 @@
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -3529,9 +3529,9 @@
               }
             },
             "required": [
-              "sandbox_ref",
-              "sandbox_id",
               "created_at",
+              "sandbox_id",
+              "sandbox_ref",
               "status",
               "tags"
             ],
@@ -3651,15 +3651,15 @@
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -3759,10 +3759,10 @@
               }
             },
             "required": [
-              "volume_ref",
-              "name",
               "created_at",
-              "environment_ref"
+              "environment_ref",
+              "name",
+              "volume_ref"
             ],
             "type": "object"
           }
@@ -3876,15 +3876,15 @@
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -3966,8 +3966,8 @@
               },
               "source": {
                 "enum": [
-                  "local_profile",
-                  "authenticated_token"
+                  "authenticated_token",
+                  "local_profile"
                 ],
                 "type": "string"
               },
@@ -3976,10 +3976,10 @@
               }
             },
             "required": [
-              "workspace_ref",
+              "current",
               "name",
               "source",
-              "current"
+              "workspace_ref"
             ],
             "type": "object"
           }
@@ -4070,15 +4070,15 @@
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -4164,21 +4164,21 @@
               },
               "type": {
                 "enum": [
-                  "file",
                   "dir",
-                  "symlink",
                   "fifo",
+                  "file",
                   "socket",
+                  "symlink",
                   "unknown"
                 ],
                 "type": "string"
               }
             },
             "required": [
-              "path",
-              "type",
               "mtime",
-              "size_bytes"
+              "path",
+              "size_bytes",
+              "type"
             ],
             "type": "object"
           }
@@ -4295,15 +4295,15 @@
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -4432,8 +4432,8 @@
           }
         },
         "required": [
-          "volume_ref",
-          "path"
+          "path",
+          "volume_ref"
         ],
         "type": "object"
       },
@@ -4465,15 +4465,15 @@
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -4604,8 +4604,8 @@
               }
             },
             "required": [
-              "source",
-              "message"
+              "message",
+              "source"
             ],
             "type": "object"
           },
@@ -4635,11 +4635,11 @@
               }
             },
             "required": [
+              "deduped_count",
               "error_signatures",
               "top_sources",
               "total_entries",
-              "truncated",
-              "deduped_count"
+              "truncated"
             ],
             "type": "object"
           },
@@ -4740,9 +4740,9 @@
           "format": {
             "default": "summary",
             "enum": [
-              "summary",
+              "both",
               "raw",
-              "both"
+              "summary"
             ],
             "type": "string"
           },
@@ -4795,15 +4795,15 @@
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -4860,21 +4860,21 @@
               },
               "type": {
                 "enum": [
-                  "file",
                   "dir",
-                  "symlink",
                   "fifo",
+                  "file",
                   "socket",
+                  "symlink",
                   "unknown"
                 ],
                 "type": "string"
               }
             },
             "required": [
-              "path",
-              "type",
               "mtime",
-              "size_bytes"
+              "path",
+              "size_bytes",
+              "type"
             ],
             "type": "object"
           }
@@ -4943,8 +4943,8 @@
           }
         },
         "required": [
-          "volume_ref",
-          "path"
+          "path",
+          "volume_ref"
         ],
         "type": "object"
       },
@@ -4976,15 +4976,15 @@
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -5043,9 +5043,9 @@
               }
             },
             "required": [
-              "signature",
               "count",
-              "sample_messages"
+              "sample_messages",
+              "signature"
             ],
             "type": "object"
           },
@@ -5176,15 +5176,15 @@
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
-              "UNAUTHORIZED",
+              "INTERNAL_DRIFT",
               "NOT_FOUND",
-              "RATE_LIMITED",
-              "SCOPE_VIOLATION",
-              "UPSTREAM_ERROR",
               "PARSE_ERROR",
               "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
               "TIMEOUT",
-              "INTERNAL_DRIFT"
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
             ],
             "type": "string"
           },
@@ -5237,8 +5237,8 @@
               },
               "source": {
                 "enum": [
-                  "local_profile",
-                  "authenticated_token"
+                  "authenticated_token",
+                  "local_profile"
                 ],
                 "type": "string"
               },
@@ -5247,10 +5247,10 @@
               }
             },
             "required": [
-              "workspace_ref",
+              "current",
               "name",
               "source",
-              "current"
+              "workspace_ref"
             ],
             "type": "object"
           }

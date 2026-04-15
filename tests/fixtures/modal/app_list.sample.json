@@ -1,0 +1,12 @@
+{
+  "captured_at": "2026-04-15T00:00:00+00:00",
+  "protobuf_wire_bytes_b64": "",
+  "request_metadata": {
+    "environment_name": "dev"
+  },
+  "response_payload": {
+    "items": []
+  },
+  "rpc": "AppList",
+  "source_modal_version": "1.4.1"
+}

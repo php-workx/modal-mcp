@@ -39,7 +39,10 @@ def normalize_schema(value: Any) -> Any:
             }
         return normalized
     if isinstance(value, list):
-        return [normalize_schema(item) for item in value]
+        items = [normalize_schema(item) for item in value]
+        if all(isinstance(item, str) for item in items):
+            return sorted(items)
+        return items
     return value
 
 
