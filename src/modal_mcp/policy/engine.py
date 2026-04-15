@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -17,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 from modal_mcp.config import Settings
 from modal_mcp.domain.errors import ErrorCode, ModalAdapterError
 from modal_mcp.domain.refs import decode_approval
+from modal_mcp.observability.redact import collect_known_secrets, redact_value
 from modal_mcp.policy.approval import (
     ApprovalActor,
     ApprovalTokenLedger,
@@ -33,15 +33,7 @@ MUTATING_TOOLS = frozenset(
         "modal_expert_execute",
     }
 )
-SECRET_PATTERNS = (
-    re.compile(r"MODAL_TOKEN_[A-Z_]*=[^\s,}\]]+"),
-    re.compile(r"\bas-[A-Za-z0-9_-]{8,}\b"),
-    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-    re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"),
-)
-
 ActorResolver = Callable[[MiddlewareContext[Any]], ApprovalActor]
-AuditMethod = Callable[..., None]
 
 
 class PolicyCallArguments(BaseModel):
@@ -100,6 +92,7 @@ class PolicyMiddleware(Middleware):
         self.mutation_limiter = mutation_limiter or _default_mutation_limiter(settings)
         self.actor_resolver = actor_resolver or resolve_middleware_actor
         self.audit_sink = audit_sink or NullAuditSink()
+        self.known_secrets = collect_known_secrets(settings)
         self._now = now or (lambda: int(time.time()))
         self._argument_adapter = TypeAdapter(PolicyCallArguments)
 
@@ -152,7 +145,7 @@ class PolicyMiddleware(Middleware):
             self._record("record_error", context, params.name, exc)
             raise
         self._record("record_result", context, params.name, result)
-        return redact_tool_result(result)
+        return redact_tool_result(result, known_secrets=self.known_secrets)
 
     def _enforce_rate_limits(
         self,
@@ -313,32 +306,24 @@ def extract_target_refs(arguments: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(sorted(refs))
 
 
-def redact_tool_result(result: ToolResult) -> ToolResult:
+def redact_tool_result(
+    result: ToolResult,
+    *,
+    known_secrets: frozenset[str] = frozenset(),
+) -> ToolResult:
     """Redact obvious secret patterns from structured tool output."""
 
     updates: dict[str, Any] = {}
     if result.structured_content is not None:
-        updates["structured_content"] = redact_value(result.structured_content)
+        updates["structured_content"] = redact_value(
+            result.structured_content,
+            known_secrets=known_secrets,
+        )
     if result.meta is not None:
-        updates["meta"] = redact_value(result.meta)
+        updates["meta"] = redact_value(result.meta, known_secrets=known_secrets)
     if not updates:
         return result
     return result.model_copy(update=updates)
-
-
-def redact_value(value: Any) -> Any:
-    """Recursively redact secret-looking strings from JSON-like data."""
-
-    if isinstance(value, str):
-        redacted = value
-        for pattern in SECRET_PATTERNS:
-            redacted = pattern.sub("[REDACTED]", redacted)
-        return redacted
-    if isinstance(value, Mapping):
-        return {key: redact_value(item) for key, item in value.items()}
-    if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray, str)):
-        return [redact_value(item) for item in value]
-    return value
 
 
 def _append_ref_values(refs: list[str], value: Any) -> None:

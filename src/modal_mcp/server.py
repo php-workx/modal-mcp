@@ -17,6 +17,8 @@ from modal_mcp.adapters.registry import bind_modal_adapter
 from modal_mcp.asgi import OriginGuard
 from modal_mcp.auth import build_auth
 from modal_mcp.config import Settings, assert_runtime_security, scrub_secret_env
+from modal_mcp.observability.audit import audit_sink_from_settings
+from modal_mcp.observability.logger import configure_logging
 from modal_mcp.policy.engine import PolicyMiddleware
 
 ALL_TOOLSETS = frozenset(
@@ -86,6 +88,7 @@ def create_mcp(
     """Create the FastMCP server with auth, lifespan, and toolset gating."""
 
     resolved_settings = settings or _settings_from_env()
+    configure_logging(resolved_settings)
 
     @asynccontextmanager
     async def lifespan(server: FastMCP[Any]) -> AsyncIterator[None]:
@@ -102,7 +105,12 @@ def create_mcp(
         lifespan=lifespan,
         auth=build_auth(resolved_settings),
     )
-    mcp.add_middleware(PolicyMiddleware(resolved_settings))
+    mcp.add_middleware(
+        PolicyMiddleware(
+            resolved_settings,
+            audit_sink=audit_sink_from_settings(resolved_settings),
+        )
+    )
 
     disabled_toolsets = ALL_TOOLSETS - set(resolved_settings.modal_mcp_enabled_toolsets)
     if disabled_toolsets:
