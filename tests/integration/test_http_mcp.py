@@ -14,7 +14,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from modal_mcp.adapters.registry import get_modal_adapter
 from modal_mcp.asgi import OriginGuard
 from modal_mcp.config import Settings
-from modal_mcp.domain.models import App, Environment, Workspace
+from modal_mcp.domain.models import (
+    App,
+    Container,
+    Environment,
+    LogsPage,
+    LogSummary,
+    SandboxSummary,
+    VolumeEntry,
+    VolumeSummary,
+    Workspace,
+)
 from modal_mcp.server import create_asgi_app, create_mcp, fastmcp_lifespan
 
 
@@ -63,6 +73,110 @@ class FakeAdapter:
                 environment_ref="mref1.env",
             )
         ]
+
+    def get_app(self, app_id: str, environment_name: str | None = None) -> App | None:
+        del environment_name
+        return self.list_apps()[0] if app_id == "mref1.app" else None
+
+    def list_app_deployments(
+        self, app_id: str, environment_name: str | None = None
+    ) -> list:
+        del app_id, environment_name
+        return []
+
+    def get_app_logs(self, app_id: str, **_: object) -> LogsPage:
+        return LogsPage(
+            entries=[],
+            summary=LogSummary(
+                error_signatures=[],
+                top_sources=[],
+                total_entries=0,
+                truncated=False,
+                deduped_count=0,
+            ),
+        )
+
+    def list_containers(
+        self,
+        environment_name: str | None = None,
+        app_id: str | None = None,
+    ) -> list[Container]:
+        del environment_name, app_id
+        return [
+            Container(
+                container_ref="mref1.container",
+                task_id="ta-1",
+                state="running",
+            )
+        ]
+
+    def get_container(self, task_id: str) -> Container | None:
+        return self.list_containers()[0] if task_id == "mref1.container" else None
+
+    def get_container_logs(self, task_id: str, **_: object) -> LogsPage:
+        del task_id
+        return self.get_app_logs("mref1.app")
+
+    def list_volumes(self, environment_name: str | None = None) -> list[VolumeSummary]:
+        del environment_name
+        return [
+            VolumeSummary(
+                volume_ref="mref1.volume",
+                name="data",
+                created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                environment_ref="mref1.env",
+            )
+        ]
+
+    def ls_volume(
+        self,
+        volume_id: str,
+        path: str = "/",
+        *,
+        recursive: bool = False,
+        max_entries: int | None = None,
+    ) -> list[VolumeEntry]:
+        del volume_id, path, recursive, max_entries
+        return [
+            VolumeEntry(
+                path="/data.txt",
+                type="file",
+                mtime=datetime(2026, 1, 1, tzinfo=UTC),
+                size_bytes=4,
+            )
+        ]
+
+    def read_volume_text(self, volume_id: str, path: str) -> str:
+        del volume_id, path
+        return "data"
+
+    def stat_volume_path(self, volume_id: str, path: str) -> VolumeEntry | None:
+        del volume_id
+        return self.ls_volume("mref1.volume")[0] if path == "/data.txt" else None
+
+    def list_sandboxes(
+        self,
+        environment_name: str | None = None,
+        app_id: str | None = None,
+        include_finished: bool = False,
+    ) -> list[SandboxSummary]:
+        del environment_name, app_id, include_finished
+        return [
+            SandboxSummary(
+                sandbox_ref="mref1.sandbox",
+                sandbox_id="sb-1",
+                created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                status="running",
+                tags=[],
+            )
+        ]
+
+    def get_sandbox(self, sandbox_id: str) -> SandboxSummary | None:
+        return self.list_sandboxes()[0] if sandbox_id == "mref1.sandbox" else None
+
+    def get_sandbox_stdio(self, sandbox_id: str) -> tuple[str, str]:
+        del sandbox_id
+        return "stdout", "stderr"
 
 
 @pytest.fixture(autouse=True)
@@ -158,6 +272,20 @@ async def test_tools_list_exposes_read_only_tools_only(settings: Settings) -> No
         "modal_get_app",
         "modal_list_app_deployments",
         "modal_get_app_logs",
+        "modal_search_logs",
+        "modal_summarize_failures",
+        "modal_compare_deployments",
+        "modal_diagnose_app_startup",
+        "modal_list_containers",
+        "modal_get_container",
+        "modal_get_container_logs",
+        "modal_list_volumes",
+        "modal_ls_volume",
+        "modal_read_volume_text",
+        "modal_stat_volume_path",
+        "modal_list_sandboxes",
+        "modal_get_sandbox",
+        "modal_get_sandbox_stdio",
     } <= names
     assert "modal_stop_app" not in names
     assert "modal_rollback_app" not in names
