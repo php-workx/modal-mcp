@@ -26,10 +26,10 @@ Protocol (MCP) server:
   only in the Modal CLI (which is the Python package `modal`). A Python
   sidecar is deferred to v2 and only for log **streaming** via
   `modal._logs.tail_logs`.
-- **Hosting model:** **self-hosted-first** (Docker Compose default), with
-  Kubernetes/Helm and optional "deploy to own Modal workspace" paths. Hosted
-  multi-tenant operation is explicitly a later milestone with stricter trust
-  gates.
+- **Hosting model:** **self-hosted-first** (Docker Compose default).
+  Kubernetes/Helm is deferred to v2/v3 once shared-service requirements are
+  explicit. Hosted multi-tenant operation is explicitly a later milestone with
+  stricter trust gates.
 - **Security default:** **read-only**, BYO Modal token
   (`MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` or a mounted `~/.modal.toml`).
   Mutating tools exist in code but are **compiled-in-disabled** until the
@@ -98,7 +98,7 @@ Design lessons inherited from the public MCP server ecosystem:
 - Operator controls their own Modal workspace and has either a personal or
   service-user token with scoped RBAC (Viewer default in restricted
   environments is the recommended posture).
-- Deployment target is Docker or Kubernetes; a host supervisor provides TLS
+- v1 deployment target is Docker/Compose; a host supervisor provides TLS
   and (optionally) an OIDC reverse proxy for identity at the edge.
 - **The Modal CLI (Python package `modal`) is a hard dependency** of the
   v1 container image. This is not an optional tool: the CLI *is* the only
@@ -241,7 +241,7 @@ Required behaviours (per MCP `2025-06-18`):
 | Target | Status | Notes |
 |---|---|---|
 | **Docker Compose** | v1 default | Node 20 base + Modal CLI + server; reverse proxy (Caddy/Traefik) for TLS. |
-| **Kubernetes (Helm chart)** | v1 stretch, v2 supported | Ingress, Secrets, HPA; ships with a minimal Helm chart in `deploy/kubernetes/helm`. |
+| **Kubernetes (Helm chart)** | v2/v3 candidate | Defer until shared-service requirements, ingress/TLS posture, secrets, and scaling expectations are explicit. |
 | **Modal deploy (own workspace)** | v2 | Useful "dogfooding" path for users who already run Modal; requires careful scoping. |
 | **Cloudflare Workers (read-only subset)** | v3 optional | No shell/CLI available — SDK-only; restricted to read-only tools. |
 
@@ -361,20 +361,6 @@ modal-mcp/
       package.json
 
   deploy/
-    docker/
-      Dockerfile
-      docker-compose.yml
-      entrypoint.sh
-    kubernetes/
-      helm/
-        Chart.yaml
-        values.yaml
-        templates/
-          deployment.yaml
-          service.yaml
-          ingress.yaml
-          configmap.yaml
-          secret.yaml
     modal/
       app.py                # v2: deploy into user's own Modal workspace
     cloudflare/
@@ -1341,9 +1327,9 @@ scope is explicitly the DE "self-hosted read-only" stage.
 | Stage | Scope | Key deliverables | Indicative effort |
 |---|---|---|---|
 | **v0 — Prototype** | End-to-end `/mcp` + 3 read-only tools (`modal_whoami`, `modal_list_apps`, `modal_get_app_logs`) via CliAdapter | Dockerfile, minimal CI, smoke test | ~1 week |
-| **v1 — Self-hosted read-only** *(this plan)* | All read-only toolsets (discovery/apps/containers/logs/volumes/sandboxes), CliAdapter primary + TS SdkAdapter for sandboxes, policy engine, refs/cursors, audit log, schema bundle, Docker Compose deploy, Helm chart skeleton | `tools.v1.json`, contract tests, `docs/self-hosting.md`, GHCR image | 2–4 weeks |
-| **v2 — Hosted read-only + log streaming** | Hosted mode with ephemeral session tokens, rate limiting, OTel tracing/metrics, `docs/hosted-service.md`, "no persistence by default" posture. Introduce Python sidecar **only** for streaming log tail via `modal._logs.tail_logs`. | `/session/create`, metrics dashboards, public docs, Python sidecar for log streaming | 4–8 weeks after v1 |
-| **v3 — Self-hosted mutating + Expert preview** | Enable `change` toolset with dry-run + approval flow, expanded audit, Expert toolset preview in the §10.1 hard sandbox | Approval token subsystem, Expert sandbox runner, threat model revision, integration tests against non-prod Modal | 3–6 weeks after v2 |
+| **v1 — Self-hosted read-only** *(this plan)* | All read-only toolsets (discovery/apps/containers/logs/volumes/sandboxes), CliAdapter primary + TS SdkAdapter for sandboxes, policy engine, refs/cursors, audit log, schema bundle, Docker Compose deploy | `tools.v1.json`, contract tests, `docs/self-hosting.md`, GHCR image | 2–4 weeks |
+| **v2 — Hosted read-only + log streaming** | Hosted mode with ephemeral session tokens, rate limiting, OTel tracing/metrics, `docs/hosted-service.md`, "no persistence by default" posture. Introduce Python sidecar **only** for streaming log tail via `modal._logs.tail_logs`. Kubernetes/Helm may be introduced here only if hosted/shared-service deployment requirements are explicit. | `/session/create`, metrics dashboards, public docs, Python sidecar for log streaming, optional Helm chart | 4–8 weeks after v1 |
+| **v3 — Self-hosted mutating + Expert preview** | Enable `change` toolset with dry-run + approval flow, expanded audit, Expert toolset preview in the §10.1 hard sandbox. Kubernetes/Helm may be introduced here if the deployment target is a shared self-hosted service. | Approval token subsystem, Expert sandbox runner, threat model revision, integration tests against non-prod Modal, optional Helm chart | 3–6 weeks after v2 |
 | **v4 — Hosted mutating** | Mutating operations in hosted mode with strict AuthN/AuthZ, abuse prevention, incident playbook, optional external security review | Web-admin approvals UI (optional), formal threat model doc | open-ended |
 
 ### 12.1 v1 definition of done
