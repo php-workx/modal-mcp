@@ -5,6 +5,38 @@ section 10.2 and the Python controls from section 10.3. It is an implementation
 checklist: every mitigation names the ticket or test evidence that should keep
 the control from drifting.
 
+## Control Status
+
+### Implemented controls
+
+- Secret material is stored as `SecretStr`, scrubbed from the environment after
+  startup, and redacted from logs, audit JSONL, and tool results.
+- Runtime hardening disables core dumps where the host supports
+  `prctl(PR_SET_DUMPABLE, 0)`.
+- The CLI fallback is dead code by default, rejects hosted modes, and uses a
+  strict environment whitelist when enabled.
+- Refs, cursors, and approval tokens use HMAC-SHA256 over deterministic CBOR.
+- The self-hosted mounted approval endpoint is implemented at
+  `/mcp/approvals/{token}`. It writes a non-usable `pending` ledger record,
+  records the approval audit event, then commits `approved`; audit failures
+  leave `audit_failed` or `pending`, never a usable approval.
+- Read-only mode blocks the `change` and `expert` toolsets.
+
+### Scaffolded controls
+
+- `docs/live-modal-semantics.md`,
+  `docs/pre-mortem/mm-9aeo-hosted-mutation-semantics.md`, and
+  `tests/integration/live/test_hosted_mutation_semantics.py` are scaffold-only.
+  They document the intended hosted mutation review harness, but they are not
+  evidence of live mutation execution.
+
+### Planned controls
+
+- Hosted envelope encryption for persistence.
+- Hosted approval consumption.
+- Hosted session isolation and request-scoped adapter resolution.
+- Mutation dry-run/execution flows and live mutation semantics.
+
 ## Priority Threats
 
 ### Credential exfiltration
@@ -23,8 +55,8 @@ Mitigations:
   `prctl(PR_SET_DUMPABLE, 0)`.
 - The CLI fallback is dead code by default, rejects hosted modes, and uses a
   strict environment whitelist when enabled.
-- Hosted persistence uses envelope encryption as specified in the v2 storage
-  contract.
+- Hosted persistence envelope encryption is planned and remains unimplemented in
+  the current runtime.
 
 Evidence:
 - Tickets: `mm-e30t`, `mm-5rm8`, `mm-tqrt`, `mm-bbfm`.
@@ -99,17 +131,24 @@ Mitigations:
 - Mutating tools are in a local allowlist and are never authorized from MCP tool
   annotations such as `destructiveHint`.
 - Read-only mode blocks `change` and `expert` toolsets.
-- Mutations require dry-run plans, explicit impact text, out-of-band human
-  approval, not-before timing, single-use approval tokens, and per-actor mutation
-  rate limits.
-- The approval ledger uses an append-only fsynced file for self-hosted persistence
-  and reserves Redis `SET NX PX` semantics for hosted or multi-worker mode.
-- Audit events record approval issuance, approval, consumption, policy denials,
-  and redacted results.
+- The `change` toolset is still registered as disabled stubs in
+  `src/modal_mcp/toolsets/change.py`; mutation dry-run plans, explicit impact
+  text, out-of-band approval, and live execution semantics are planned
+  controls, not implemented runtime behavior.
+- The mounted approval endpoint is implemented on the self-hosted path, while
+  hosted approval consumption and hosted session isolation remain planned and
+  are tracked by `mm-eydq`, `mm-pbh4`, and `mm-3jrh`.
+- Approval ledger state is fail-closed: only `approved` can be consumed by
+  mutation middleware, while `pending`, `audit_failed`, and `consumed` are
+  non-usable across restart.
+- Audit events record the implemented policy decisions and redacted results; the
+  hosted mutation audit trail is still scoped to the scaffold and tickets.
 
 Evidence:
-- Tickets: `mm-98r8`, `mm-b30b`, `mm-mmjd`, `mm-tqrt`.
-- Tests: `tests/unit/test_policy.py`, `tests/integration/test_observability.py`.
+- Tickets: `mm-98r8`, `mm-b30b`, `mm-mmjd`, `mm-tqrt`, `mm-6ltw`,
+  `mm-eydq`, `mm-pbh4`, `mm-3jrh`.
+- Tests: `tests/unit/test_policy.py`, `tests/integration/test_http_mcp.py`,
+  `tests/integration/test_observability.py`.
 
 ### Tool-metadata poisoning
 

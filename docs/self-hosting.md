@@ -1,7 +1,8 @@
 # Self-Hosting Modal MCP
 
 This guide describes the supported v1 deployment path: a self-hosted,
-read-only Modal MCP server running FastMCP Streamable HTTP at `/mcp`.
+read-only Modal MCP server running FastMCP Streamable HTTP at `/mcp` via
+Docker Compose only.
 
 ## Scope
 
@@ -24,6 +25,7 @@ Unsupported v1 targets and non-goals:
 - OAuth delegation for Modal tokens.
 - Hosted multi-tenant credential storage.
 - Enabling mutating operations by default.
+- Kubernetes/Helm packaging (deferred to v2/v3 decision gate).
 
 ## 15-Minute Setup
 
@@ -80,6 +82,9 @@ Unsupported v1 targets and non-goals:
 Recommended:
 
 - `MODAL_MCP_AUDIT_LOG=stdout` or a JSONL file path.
+- `MODAL_MCP_APPROVAL_LEDGER=/path/to/approvals.jsonl` when experimenting with
+  disabled-by-default mutation flows; the ledger persists token digests and
+  state only, never raw approval tokens or Modal credentials.
 - `MODAL_MCP_READ_ONLY=true`.
 - `MODAL_MCP_ENABLED_TOOLSETS=discovery,apps,containers,logs,volumes,sandboxes`.
 - `MODAL_MCP_RATE_LIMIT_RPS=5`.
@@ -103,6 +108,11 @@ Approval posture: v1 does not expose enabled mutations, but approval tokens and
 the approval ledger are implemented for forward compatibility. Approval tokens
 are HMAC signed, bound to actor/session/workspace/target refs, have not-before
 and expiry checks, require out-of-band confirmation, and are single-use.
+The approval route writes a non-usable `pending` ledger record before audit,
+commits `approved` only after the approval audit event succeeds, and the policy
+middleware consumes only `approved`. `pending`, `audit_failed`, and `consumed`
+states are non-usable, including after process restart when
+`MODAL_MCP_APPROVAL_LEDGER` is configured.
 
 ## Audit Log Format
 

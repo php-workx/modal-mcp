@@ -31,7 +31,8 @@
   API. **No CLI subprocess, no
   sidecar, no cross-language boundary.**
 - **Hosting model:** **self-hosted-first** (Docker Compose default),
-  with Kubernetes/Helm deferred to v2/v3 and optional "deploy to own
+  with Kubernetes/Helm explicitly deferred in this plan. Helm is a conditional
+  v2/v3 reintroduction via the `mm-gdk2` gate, and optional "deploy to own
   Modal workspace" paths in v2.
 - **Security default:** **read-only**, BYO Modal token
   (`MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` or a mounted
@@ -108,8 +109,8 @@ Rationale is in §3; the diff is traced in §16.
   environment is the recommended posture.
 - v1 deployment target is Docker/Compose; a host supervisor provides
   TLS and (optionally) an OIDC reverse proxy for identity at the edge.
-  Kubernetes/Helm packaging is a later-release concern for v2/v3 once
-  shared-service requirements are known.
+  Kubernetes/Helm packaging is deferred by design in this plan and is not part
+  of the v1-v2 baseline.
 - **The `modal` Python package is the single dependency for Modal
   integration.** It is pinned to a minimum version in
   `pyproject.toml`; that version pins both the high-level API surface
@@ -350,9 +351,24 @@ Behaviours we add via middleware:
 | Target | Status | Notes |
 |---|---|---|
 | **Docker Compose** | v1 default | Python 3.12 slim base + `modal` package + `fastmcp` + `uvicorn`. One image, one process. |
-| **Kubernetes (Helm chart)** | v2/v3 candidate | Defer until shared-service requirements, ingress/TLS posture, secrets, and scaling expectations are explicit. |
+| **Kubernetes (Helm chart)** | v2/v3 gated by this spec | Deferred in baseline. Reconsider in v2/v3 only after `mm-gdk2` gate acceptance. |
 | **Modal deploy (own workspace)** | v2 | Dogfooding path; `deploy/modal/app.py` wraps the server as a Modal ASGI app. Natural fit because the Modal SDK is already the runtime. |
 | **Cloudflare Workers** | not supported | Workers cannot run the Modal Python package; the TS path was the only way there, and we rejected it. |
+
+### 3.5.1 Helm decision (mm-gdk2)
+
+**Chosen target for v1/v2 baseline:** Docker/Compose only.
+No Helm chart files, Kubernetes manifests, or Helm values files are part of the
+baseline delivery.
+
+If Helm is reintroduced in v2 or v3, the chart scope must include:
+
+- ingress and TLS/proxy configuration (TLS termination, cert strategy, and host allowlist),
+- credential Secret mounts for `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, and signing keys,
+- environment variable injection for required runtime config,
+- service account + RBAC bindings for required permissions,
+- scaling and reliability resources (`Deployment`, `HPA`, limits/requests, PodDisruptionBudget where needed),
+- Helm template validation in CI (render + lint checks, including schema sanity for generated manifests).
 
 Note: the "deploy on Modal itself" path, which was awkward in v1 (Node
 runtime on Modal, which is Python-first), is natural in v2 — Modal
@@ -888,7 +904,7 @@ schema matches:
 - `modal_summarize_failures` → `data: { signatures: [ { signature, count, sample_messages[≤3] } ], top_causes: [...] }`
 - `modal_compare_deployments` → `data: { diff: { new_error_signatures, resolved_error_signatures, container_delta } }`
 - `modal_diagnose_app_startup` → `data: { diagnosis: { summary, confidence, recommended_next_tools }, evidence: [ { kind ∈ {log,deployment,container}, ref, note } ] }`
-- `modal_stop_*` / `modal_rollback_app` / `modal_terminate_sandbox` → `data: { mode ∈ {plan, executed}, plan?: { requires_approval, approval_token, approval_url, expires_at, impact }, result?: { stopped|rolled_back|terminated: bool } }` (see §7.4)
+- `modal_stop_*` / `modal_rollback_app` / `modal_terminate_sandbox` → disabled change-tool stubs returning `data: { mode ∈ {plan, executed}, plan?: { requires_approval, approval_token, approval_url, expires_at, impact }, result?: { stopped|rolled_back|terminated: bool } }` when the future change flow is enabled (see §7.4)
 - `modal_ls_volume` → `data: { entries: [ { path, type ∈ {file,dir}, size_bytes } ], next_cursor? }`
 - `modal_read_volume_text` → `data: { content: string, truncated: bool }`
 - `modal_get_sandbox_stdio` → `data: { stdout: string, stderr: string, truncated: bool }`
@@ -1339,16 +1355,19 @@ def build_auth(settings):
             token_verifier=hosted_jwt,
             authorization_servers=[settings.auth_issuer],
             base_url=settings.public_base_url,
-            allowed_client_redirect_uris=settings.allowed_redirect_uris,
         ),
         verifiers=[hosted_jwt],
     )
 ```
 
-`RemoteAuthProvider.allowed_client_redirect_uris` is mandatory in
-hosted modes. FastMCP defaults to allowing all redirect URIs for DCR
-compatibility; this server treats an unset allowlist as
-`CONFIG_CONFLICT`.
+Pinned FastMCP `RemoteAuthProvider` does not expose a redirect-allowlist
+parameter in this release. The server therefore treats
+`MODAL_MCP_ALLOWED_REDIRECT_URIS` as the canonical startup requirement
+and enforces it before building the auth provider. The legacy alias
+`MODAL_MCP_ALLOWED_CLIENT_REDIRECT_URIS` remains accepted during the
+transition, but examples and validation errors use the canonical name.
+That keeps the runtime boundary explicit without pretending the
+provider itself enforces a parameter it does not have.
 
 ### 7.2 Modal-native least privilege
 
@@ -1418,8 +1437,14 @@ Enforcement order:
 
 ### 7.4 Dry-run + approval token contract
 
-Every tool in the `change` toolset (and the future mutating subset of
-`expert`) implements:
+This section is the target contract for `mm-pbh4`, `mm-eydq`, and
+`mm-3jrh`. The current runtime registers the `change` toolset as
+disabled stubs, and the mounted self-hosted approval route plus ledger
+primitives are implemented ahead of full mutating execution.
+
+When the `change` toolset is enabled by those tickets, every tool in
+the `change` toolset (and the future mutating subset of `expert`) must
+implement:
 
 - `dry_run` input, **default `true`**.
 - On `dry_run=true`, the server returns
@@ -1435,25 +1460,31 @@ Every tool in the `change` toolset (and the future mutating subset of
   recorded out-of-band through `POST /mcp/approvals/{token}`. This
   endpoint is not exposed as an MCP tool, so the LLM cannot synthesize
   it as a normal `tools/call`. `dry_run=false` requires both the
-  matching `approval_token` and a prior approval record.
-- The approval endpoint is protected by the same transport controls as
-  `/mcp`: bearer/JWT auth, Origin/Host validation, TLS in hosted mode,
-  and per-actor mutation rate limits. The endpoint resolves the actor
-  from the HTTP auth context, never from the token payload alone, and
-  rejects if `actor`, `auth_session_id`, `mcp_session_id`, remote mode,
-  target refs, or workspace differ from the token scope. It also
-  rejects missing or cross-site `Origin`, `Sec-Fetch-Site` values other
-  than `same-origin`/`same-site` where supplied, and any request without
-  an operator-visible confirmation step. The confirmation can be a
-  local CLI prompt or a hosted UI button; it cannot be a hidden image,
-  auto-submitted form, or MCP tool call.
+  matching `approval_token` and a prior committed `approved` record.
+- The self-hosted approval endpoint uses route-level equivalents for the
+  relevant `/mcp` controls: bearer auth when configured, Origin/Host
+  validation, `Sec-Fetch-Site` checks, per-actor mutation rate limiting,
+  and denial audit events. Hosted TLS/proxy handling remains part of the
+  hosted session work and is not served until hosted mode is unblocked.
+  The endpoint resolves the actor from HTTP auth context, never from the
+  token payload alone, and rejects if `actor`, `auth_session_id`,
+  `mcp_session_id`, remote mode, target refs, or workspace differ from
+  the token scope. The confirmation can be a local CLI prompt or a
+  hosted UI button; it cannot be a hidden image, auto-submitted form, or
+  MCP tool call.
 - Single-use is enforced by `ApprovalTokenLedger`. Self-hosted mode
-  uses an append-only file ledger, fsynced before the Modal mutation is
-  dispatched. Hosted/multi-worker mode uses Redis `SET NX PX`. A
-  single-process fallback uses an `asyncio.Lock` around check-and-insert
-  and refuses `--workers > 1` when `MODAL_MCP_APPROVAL_LEDGER` is unset.
-  Missing, mismatched, too-early, cross-session, or replayed tokens
-  produce `isError=true` with `code=POLICY_BLOCKED`.
+  uses an append-only file ledger or an in-process fallback protected by
+  an `asyncio.Lock`. The ledger is fail-closed by construction:
+  `pending` is written before approval audit and is not consumable;
+  only after the audit event succeeds does the endpoint append
+  `approved`; policy middleware consumes only `approved` and appends
+  `consumed`. If audit fails, the endpoint appends `audit_failed` when
+  possible; if that terminal append also fails, the durable state is
+  still only `pending`, which is non-usable after restart. Redis
+  `SET NX PX` and explicit multi-worker controls are planned
+  hosted/multi-worker work, not implemented runtime behavior. Missing,
+  mismatched, too-early, cross-session, or replayed tokens produce
+  `isError=true` with `code=POLICY_BLOCKED`.
 
 The security model assumes the client cannot auto-approve because
 approval is a separate server endpoint, not because the MCP client is
@@ -1462,8 +1493,12 @@ honest. Mutating calls are also rate-limited per actor at a default of
 
 Approval endpoint tests cover: unauthenticated POST, authenticated
 wrong-actor POST, valid actor but wrong `Mcp-Session-Id`, cross-site
-`Origin`, missing confirmation marker, replayed confirmation, and a
-valid confirmation followed by a successful `dry_run=false` call.
+`Origin`, missing confirmation marker, replayed confirmation, fail-closed
+audit failure, actual app-composed mutation middleware consuming approval
+state created through the HTTP route, settings-backed signing key
+verification after env scrubbing, denial audit, and rate limiting. Full
+change-tool dry-run issuance and successful real Modal `dry_run=false`
+execution remain open until `mm-pbh4`, `mm-eydq`, and `mm-3jrh` close.
 
 ### 7.5 Sessions and storage
 
@@ -1474,8 +1509,12 @@ Two independent session concepts:
 
 Storage rules:
 
-- **Self-hosted:** nothing persisted. Tokens live in process memory;
-  the process only reads env/`~/.modal.toml` at startup.
+- **Self-hosted:** Modal credentials are not persisted by the server. Tokens
+  live in process memory and the process only reads env/`~/.modal.toml` at
+  startup. If `MODAL_MCP_APPROVAL_LEDGER` is set, the self-hosted approval
+  route persists approval-token digests and state transitions
+  (`pending`, `approved`, `consumed`, `audit_failed`) for replay protection;
+  it never persists raw approval tokens or Modal credentials.
 - **Hosted (default):** tokens in-memory only, with TTL. Session
   records evict on expiry; nothing touches disk.
 - **Hosted (opt-in persistence):** envelope encryption with
@@ -2023,7 +2062,7 @@ sequenceDiagram
   S-->>C: {mode: "plan", plan: {requires_approval, approval_token, approval_url, expires_at, impact}}
   Note over C: Human approves outside tools/call
   C->>S: POST /mcp/approvals/{token}
-  S->>S: Ledger records human approval
+  S->>S: Ledger pending -> audit approved -> ledger approved
   C->>S: modal_stop_app {dry_run: false, app_ref, approval_token, reason}
   S->>S: Verify approval_token (scope + sessions + TTL + single-use + approval ledger)
   S->>M: client.stub.AppStop(AppStopRequest(app_id=..., source=CLI))
@@ -2046,13 +2085,13 @@ Same keys as v1 §11, minus a few that were TS-specific. Pydantic
 | `MODAL_CONFIG_PATH` | `~/.modal.toml` | Fallback credentials file. |
 | `MODAL_ENVIRONMENT` | workspace default | Default Modal environment. |
 | `MODAL_MCP_HTTP_BIND` | `127.0.0.1:8765` | Bind address. Remote mode must override. |
-| `MODAL_MCP_PUBLIC_ORIGIN` | — | Origin the server expects to be reached under. |
+| `MODAL_MCP_PUBLIC_ORIGIN` | — | Origin the server expects to be reached under. Legacy alias: `MODAL_MCP_PUBLIC_BASE_URL`. |
 | `MODAL_MCP_ALLOWED_ORIGINS` | required | Comma-separated allowed `Origin` headers for DNS-rebinding guard; non-empty. |
 | `MODAL_MCP_ALLOWED_HOSTS` | `127.0.0.1,localhost` | Allowed `Host` values in local mode; remote deployments must set canonical hosts. |
 | `MODAL_MCP_AUTH_MODE` | `self_hosted_byo_token` | Credential mode. |
 | `MODAL_MCP_SELF_HOSTED_BEARER_TOKEN_FILE` | — | Optional local bearer token file for protecting self-hosted HTTP. |
-| `MODAL_MCP_AUTH_ISSUER`, `MODAL_MCP_AUTH_JWKS_URI`, `MODAL_MCP_AUTH_AUDIENCE` | — | Hosted JWT verifier settings. |
-| `MODAL_MCP_ALLOWED_REDIRECT_URIS` | required in hosted modes | Allowed MCP client redirect URI patterns for DCR. |
+| `MODAL_MCP_AUTH_ISSUER`, `MODAL_MCP_AUTH_JWKS_URI`, `MODAL_MCP_AUTH_AUDIENCE` | — | Hosted JWT verifier settings. Legacy aliases: `MODAL_MCP_HOSTED_AUTH_ISSUER`, `MODAL_MCP_HOSTED_JWKS_URI`, `MODAL_MCP_HOSTED_AUDIENCE`. |
+| `MODAL_MCP_ALLOWED_REDIRECT_URIS` | required in hosted modes | Allowed MCP client redirect URI patterns for DCR. Legacy alias: `MODAL_MCP_ALLOWED_CLIENT_REDIRECT_URIS`. |
 | `MODAL_MCP_READ_ONLY` | `true` | Hard read-only enforcement. |
 | `MODAL_MCP_ENABLED_TOOLSETS` | `discovery,apps,containers,logs,volumes,sandboxes` | Comma-separated toolset allowlist. |
 | `MODAL_MCP_SIGNING_KEYS` | required | Comma-separated `kid:hex` HMAC keys for Ref/Cursor/approval tokens; first signs, all verify. |
@@ -2081,8 +2120,8 @@ boundary and the sidecar question.
 |---|---|---|---|
 | **v0 — Prototype** | Single-file FastMCP server with `modal_whoami`, `modal_list_apps`, `modal_get_app_logs` backed by `client.stub.AppList` and `modal._logs.fetch_logs`. | `pyproject.toml`, Dockerfile, smoke test | **~3–5 days** (vs ~1 week for v1 TS prototype — no language boundary) |
 | **v1 — Self-hosted read-only** *(this plan)* | All read-only toolsets (discovery/apps/containers/logs/volumes/sandboxes), single in-process `ModalAdapter`, policy engine as FastMCP middleware, refs/cursors, audit log, schema bundle, Docker Compose deploy. Bounded log tail fetch is included via `tail_logs` + optional progress events; infinite follow streaming is not v1 unless implemented through the §6.2a lifecycle contract. | `mcp-tools.v1.json`, contract tests, internal-API drift probe, `docs/self-hosting.md`, GHCR image, PyPI package | **2–3 weeks** (vs 2–4 weeks for v1 TS) |
-| **v2 — Hosted read-only** | Hosted mode with ephemeral session tokens, rate limiting, OTel tracing/metrics, `docs/hosted-service.md`, "no persistence by default" posture. Deployable to Modal itself (`deploy/modal/app.py`). Kubernetes/Helm may be introduced here only if hosted/shared-service deployment requirements are explicit. | `/session/create`, metrics dashboards, public docs, optional Modal-deploy path, optional Helm chart | 3–6 weeks after v1 |
-| **v3 — Self-hosted mutating + Expert preview** | Enable `change` toolset with dry-run + approval flow, expanded audit, Expert toolset preview in the §10.4 hard sandbox. Kubernetes/Helm may be introduced here if the deployment target is a shared self-hosted service. | Approval token subsystem, Expert sandbox runner, threat model revision, integration tests against non-prod Modal, optional Helm chart | 3–6 weeks after v2 |
+| **v2 — Hosted read-only** | Hosted mode with ephemeral session tokens, rate limiting, OTel tracing/metrics, `docs/hosted-service.md`, "no persistence by default" posture. Deployable to Modal itself (`deploy/modal/app.py`). Kubernetes/Helm remains deferred unless the v2/v3 Helm gate is explicitly accepted in `mm-gdk2`. The current runtime still rejects hosted serving until `/session/create`, a session store, and request-scoped adapter resolution land. | `/session/create`, metrics dashboards, public docs, optional Modal-deploy path, no Helm chart artifacts in baseline | 3–6 weeks after v1 |
+| **v3 — Self-hosted mutating + Expert preview** | Enable `change` toolset with dry-run + approval flow, expanded audit, Expert toolset preview in the §10.4 hard sandbox. Kubernetes/Helm remains deferred unless the v2/v3 Helm gate is explicitly accepted in `mm-gdk2`. | Approval token subsystem, Expert sandbox runner, threat model revision, integration tests against non-prod Modal, Helm scope gate acceptance checklist | 3–6 weeks after v2 |
 | **v4 — Hosted mutating** | Mutating operations in hosted mode with strict AuthN/AuthZ, abuse prevention, incident playbook, optional external security review. | Web-admin approvals UI (optional), formal threat model doc | open-ended |
 
 ### 12.1 v1 definition of done
@@ -2109,6 +2148,9 @@ boundary and the sidecar question.
   descriptors and matches the FastMCP-generated output.
 - Internal-API drift probe passes against both the pinned Modal
   version and the current latest release.
+- Helm packaging is explicitly out of scope for v1/v2 baseline delivery:
+  no Helm chart files, no Kubernetes manifests, and no Helm values files
+  are accepted until the gate in §3.5.1 passes.
 
 ---
 
@@ -2173,14 +2215,17 @@ boundary and the sidecar question.
    Re-evaluate when Modal ships delegation.
 4. **Expert toolset sandboxing.** v3 concern; the implementation
    contract lives in §10.4. `expert` must remain disabled unless the
-   startup capability check proves the host can enforce the promised
-   process, filesystem, network, cgroup/rlimit, `/proc`, and RPC
-   bridge controls.
+   startup preflight is satisfied. The current check is an honest
+   scaffold: it verifies the host exposes the expected process,
+   filesystem, network, cgroup/rlimit, `/proc`, and RPC-bridge
+   primitives, but it is not a proof of kernel isolation.
 5. **Destructive op semantics.** `modal app stop`, `modal container
-   stop`, and rollback are implemented by verified RPCs, but exact
-   in-flight work behaviour still needs live Modal confirmation before
-   mutating tools ship. The dry-run `impact` text must state any
-   unverified semantics plainly until live tests pin them down.
+   stop`, and rollback are still disabled stubs in
+   `src/modal_mcp/toolsets/change.py`; the live destructive RPC path is
+   planned, not implemented. Exact in-flight work behaviour still needs
+   live Modal confirmation before mutating tools ship, and the dry-run
+   `impact` text must state any unverified semantics plainly until live
+   tests pin them down.
 6. **Solo-maintainer trust.** Mitigated by: Apache-2.0, signed
    releases + SBOM, pinned base images, small default surface, the
    `modal_discovery_server_info` safety banner, public roadmap and
