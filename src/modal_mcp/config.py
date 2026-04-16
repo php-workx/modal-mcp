@@ -4,17 +4,22 @@ from __future__ import annotations
 
 import ctypes
 import os
-from collections.abc import Iterable
+import platform
+import shutil
+import socket
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
-AuthMode = Literal["self_hosted_byo_token", "hosted_jwt", "hosted_oauth"]
+HOSTED_AUTH_MODE = "hosted_read_only_ephemeral"
+HOSTED_AUTH_MODE_ALIASES = frozenset({"hosted_oauth", "hosted_jwt"})
+AuthMode = Literal["self_hosted_byo_token", "hosted_read_only_ephemeral"]
 LogLevel = Literal["trace", "debug", "info", "warn", "error"]
 
-HOSTED_AUTH_MODES: frozenset[str] = frozenset({"hosted_jwt", "hosted_oauth"})
+HOSTED_AUTH_MODES: frozenset[str] = frozenset({HOSTED_AUTH_MODE})
 DEFAULT_TOOLSETS: tuple[str, ...] = (
     "discovery",
     "apps",
@@ -23,6 +28,7 @@ DEFAULT_TOOLSETS: tuple[str, ...] = (
     "volumes",
     "sandboxes",
 )
+EXPERT_TOOLSET = "expert"
 SECRET_ENV_KEYS: frozenset[str] = frozenset(
     {
         "MODAL_TOKEN_ID",
@@ -115,7 +121,10 @@ class Settings(BaseSettings):
     )
     modal_mcp_public_origin: str | None = Field(
         default=None,
-        validation_alias="MODAL_MCP_PUBLIC_ORIGIN",
+        validation_alias=AliasChoices(
+            "MODAL_MCP_PUBLIC_ORIGIN",
+            "MODAL_MCP_PUBLIC_BASE_URL",
+        ),
     )
     modal_mcp_allowed_origins: Annotated[tuple[str, ...], NoDecode] = Field(
         validation_alias="MODAL_MCP_ALLOWED_ORIGINS",
@@ -135,19 +144,31 @@ class Settings(BaseSettings):
     )
     modal_mcp_auth_issuer: str | None = Field(
         default=None,
-        validation_alias="MODAL_MCP_AUTH_ISSUER",
+        validation_alias=AliasChoices(
+            "MODAL_MCP_AUTH_ISSUER",
+            "MODAL_MCP_HOSTED_AUTH_ISSUER",
+        ),
     )
     modal_mcp_auth_jwks_uri: str | None = Field(
         default=None,
-        validation_alias="MODAL_MCP_AUTH_JWKS_URI",
+        validation_alias=AliasChoices(
+            "MODAL_MCP_AUTH_JWKS_URI",
+            "MODAL_MCP_HOSTED_JWKS_URI",
+        ),
     )
     modal_mcp_auth_audience: str | None = Field(
         default=None,
-        validation_alias="MODAL_MCP_AUTH_AUDIENCE",
+        validation_alias=AliasChoices(
+            "MODAL_MCP_AUTH_AUDIENCE",
+            "MODAL_MCP_HOSTED_AUDIENCE",
+        ),
     )
     modal_mcp_allowed_redirect_uris: Annotated[tuple[str, ...], NoDecode] = Field(
         default=(),
-        validation_alias="MODAL_MCP_ALLOWED_REDIRECT_URIS",
+        validation_alias=AliasChoices(
+            "MODAL_MCP_ALLOWED_REDIRECT_URIS",
+            "MODAL_MCP_ALLOWED_CLIENT_REDIRECT_URIS",
+        ),
     )
 
     modal_mcp_read_only: bool = Field(
@@ -233,6 +254,16 @@ class Settings(BaseSettings):
     def _parse_csv(cls, value: Any) -> tuple[str, ...]:
         return _comma_separated(value)
 
+    @field_validator("modal_mcp_auth_mode", mode="before")
+    @classmethod
+    def _normalize_hosted_mode(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip()
+        if normalized in HOSTED_AUTH_MODE_ALIASES:
+            return HOSTED_AUTH_MODE
+        return normalized
+
     @model_validator(mode="after")
     def _load_file_backed_secrets(self) -> Settings:
         if self.modal_token_id is None and self.modal_token_id_file is not None:
@@ -300,6 +331,127 @@ class Settings(BaseSettings):
             raise ConfigError(msg)
 
 
+def _supports_expert_process_controls() -> bool:
+    """Check for process bootstrap primitives required by expert mode."""
+
+    return hasattr(os, "posix_spawn") and hasattr(os, "unshare")
+
+
+def _supports_expert_filesystem_controls(
+    proc_root: Path = Path("/proc"),
+) -> bool:
+    """Check namespace-related files used by expert filesystem setup."""
+
+    return (
+        proc_root.joinpath("self", "ns", "mnt").exists()
+        and proc_root.joinpath("self", "mounts").exists()
+        and proc_root.joinpath("self", "mountinfo").exists()
+    )
+
+
+def _supports_expert_network_controls(proc_root: Path = Path("/proc")) -> bool:
+    """Check namespace artifacts needed for expert network isolation controls."""
+
+    return (
+        proc_root.joinpath("self", "ns", "net").exists()
+        and proc_root.joinpath("sys", "net").exists()
+    )
+
+
+def _supports_expert_namespace_controls(
+    proc_root: Path = Path("/proc"),
+) -> bool:
+    """Check namespace files required by expert process isolation setup."""
+
+    ns = proc_root.joinpath("self", "ns")
+    return all(
+        (ns / name).exists()
+        for name in ("user", "pid", "uts", "ipc", "net", "mnt", "cgroup")
+    )
+
+
+def _supports_expert_cgroup_controls(
+    cgroup_root: Path = Path("/sys/fs/cgroup"),
+) -> bool:
+    """Require cgroup-v2 control files for delegated expert resource limits."""
+
+    return (
+        cgroup_root.joinpath("cgroup.controllers").is_file()
+        and cgroup_root.joinpath("cgroup.subtree_control").is_file()
+        and cgroup_root.joinpath("cgroup.type").is_file()
+    )
+
+
+def _supports_expert_rlimit_controls() -> bool:
+    """Ensure at least one concrete rlimit primitive is readable."""
+
+    try:
+        import resource
+
+        resource.getrlimit(resource.RLIMIT_NOFILE)
+        return True
+    except Exception:  # pragma: no cover - runtime-specific runtime fallback
+        return False
+
+
+def _supports_expert_proc_masking(
+    proc_root: Path = Path("/proc"),
+    mount_command_lookup: Callable[[str], str | None] = shutil.which,
+) -> bool:
+    """Check sensitive proc files and mount utility for masking support."""
+
+    proc_entries = (
+        proc_root.joinpath("self", "environ"),
+        proc_root.joinpath("self", "maps"),
+        proc_root.joinpath("self", "cmdline"),
+        proc_root.joinpath(str(os.getpid()), "cmdline"),
+    )
+    if not all(entry.exists() for entry in proc_entries):
+        return False
+    return mount_command_lookup("mount") is not None
+
+
+def _supports_expert_rpc_bridge() -> bool:
+    """Check UNIX socket transport primitives used by expert RPC bridge."""
+
+    return hasattr(socket, "AF_UNIX") and hasattr(socket, "SOCK_SEQPACKET")
+
+
+def assert_expert_startup_capabilities(settings: Settings) -> None:
+    """Fail startup when expert mode requires unavailable host primitives."""
+
+    if EXPERT_TOOLSET not in settings.modal_mcp_enabled_toolsets:
+        return
+
+    if os.name != "posix" or platform.system() != "Linux":
+        raise ConfigError("CONFIG_CONFLICT: expert mode is only supported on Linux")
+
+    failures: list[str] = []
+    if not _supports_expert_process_controls():
+        failures.append("process controls")
+    if not _supports_expert_filesystem_controls():
+        failures.append("filesystem controls")
+    if not _supports_expert_network_controls():
+        failures.append("network controls")
+    if not _supports_expert_namespace_controls():
+        failures.append("namespace controls")
+    if not _supports_expert_cgroup_controls():
+        failures.append("cgroup controls")
+    if not _supports_expert_proc_masking():
+        failures.append("proc masking")
+    if not _supports_expert_rlimit_controls():
+        failures.append("rlimit controls")
+    if not _supports_expert_rpc_bridge():
+        failures.append("rpc bridge transport")
+
+    if failures:
+        msg = (
+            "CONFIG_CONFLICT: expert mode is not supported on this host: "
+            + ", ".join(failures)
+        )
+        raise ConfigError(msg)
+
+
 def validate_hosted_debug_flags(settings: Settings) -> None:
     """Reject debug-only escape hatches in hosted credential modes."""
 
@@ -319,6 +471,17 @@ def validate_hosted_debug_flags(settings: Settings) -> None:
         raise ConfigError(msg)
 
 
+def _assert_hosted_runtime_supported(settings: Settings) -> None:
+    """Reject hosted mode until session-scoped serving is implemented."""
+
+    if settings.modal_mcp_auth_mode in HOSTED_AUTH_MODES:
+        msg = (
+            "CONFIG_CONFLICT: hosted mode is unsupported until /session/create, "
+            "a session store, and request-scoped adapter resolution exist"
+        )
+        raise ConfigError(msg)
+
+
 def scrub_secret_env(settings: Settings) -> frozenset[str]:
     """Remove env vars that carry Modal credentials or signing material."""
 
@@ -334,6 +497,7 @@ def scrub_secret_env(settings: Settings) -> frozenset[str]:
 def assert_runtime_security(settings: Settings) -> None:
     """Apply best-effort process hardening checks for startup."""
 
+    _assert_hosted_runtime_supported(settings)
     validate_hosted_debug_flags(settings)
     if os.name == "posix" and hasattr(ctypes, "CDLL"):
         try:
@@ -343,7 +507,8 @@ def assert_runtime_security(settings: Settings) -> None:
                 pr_set_dumpable = 4
                 prctl(pr_set_dumpable, 0, 0, 0, 0)
         except (AttributeError, OSError, TypeError):
-            return
+            pass
+    assert_expert_startup_capabilities(settings)
 
 
 __all__ = [
@@ -353,6 +518,7 @@ __all__ = [
     "ConfigError",
     "LogLevel",
     "Settings",
+    "assert_expert_startup_capabilities",
     "assert_runtime_security",
     "load_secret_file",
     "scrub_secret_env",

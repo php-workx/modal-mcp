@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import sys
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from pydantic import SecretStr
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from fastmcp.server.auth import MultiAuth
+from fastmcp.server.auth import MultiAuth, RemoteAuthProvider
 from fastmcp.server.auth.providers.jwt import JWTVerifier
 
 from modal_mcp.auth import STATIC_BEARER_SCOPE, StaticTokenVerifier, build_auth
@@ -84,12 +85,14 @@ async def test_build_auth_returns_static_bearer_verifier(
     assert await auth.verify_token("missing") is None
 
 
-@pytest.mark.parametrize("auth_mode", ["hosted_jwt", "hosted_oauth"])
-def test_build_auth_returns_jwt_verifier_for_hosted_modes(
+@pytest.mark.parametrize(
+    "auth_mode", ["hosted_jwt", "hosted_oauth", "hosted_read_only_ephemeral"]
+)
+def test_build_auth_returns_remote_auth_provider_for_hosted_modes(
     auth_mode: str,
     modal_config_path: Path,
 ) -> None:
-    """Hosted auth modes build a JWT verifier from validated settings."""
+    """Hosted auth modes normalize aliases and return a remote provider."""
 
     settings = Settings(
         modal_mcp_auth_mode=auth_mode,
@@ -103,10 +106,11 @@ def test_build_auth_returns_jwt_verifier_for_hosted_modes(
 
     auth = build_auth(settings)
 
-    assert isinstance(auth, JWTVerifier)
-    assert auth.issuer == "https://issuer.example.com"
-    assert auth.jwks_uri == "https://issuer.example.com/jwks.json"
-    assert auth.audience == "modal-mcp"
+    assert isinstance(auth, RemoteAuthProvider)
+    assert isinstance(auth.token_verifier, JWTVerifier)
+    assert auth.authorization_servers == ["https://issuer.example.com"]
+    assert str(auth.base_url).rstrip("/") == "https://mcp.example.com"
+    assert settings.modal_mcp_auth_mode == "hosted_read_only_ephemeral"
 
 
 def test_build_auth_composes_multi_auth_when_two_verifiers_are_configured(
@@ -131,7 +135,15 @@ def test_build_auth_composes_multi_auth_when_two_verifiers_are_configured(
     auth = build_auth(settings)
 
     assert isinstance(auth, MultiAuth)
-    assert auth.server is None
-    assert len(auth.verifiers) == 2
+    assert isinstance(auth.server, RemoteAuthProvider)
+    assert len(auth.verifiers) == 1
     assert isinstance(auth.verifiers[0], StaticTokenVerifier)
-    assert isinstance(auth.verifiers[1], JWTVerifier)
+
+
+def test_remote_auth_provider_has_no_redirect_allowlist_constructor_parameter() -> None:
+    """Pinned FastMCP exposes no provider-level redirect allowlist knob."""
+
+    assert (
+        "allowed_client_redirect_uris"
+        not in inspect.signature(RemoteAuthProvider).parameters
+    )

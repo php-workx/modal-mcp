@@ -406,6 +406,10 @@
             "description": "Fixed-schema model-visible server metadata.",
             "properties": {
               "mode": {
+                "enum": [
+                  "hosted_read_only_ephemeral",
+                  "self_hosted_byo_token"
+                ],
                 "type": "string"
               },
               "protocol_version": {

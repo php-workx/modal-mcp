@@ -158,6 +158,12 @@ def _load_signing_keys(raw: str | None = None) -> tuple[_SigningKey, ...]:
     return tuple(keys)
 
 
+def parse_signing_keys(raw: str) -> tuple[tuple[str, bytes], ...]:
+    """Parse signing keys into the public tuple shape accepted by token codecs."""
+
+    return tuple((key.kid, key.key) for key in _load_signing_keys(raw))
+
+
 def _coerce_signing_keys(
     signing_keys: Sequence[tuple[str, bytes]] | Sequence[_SigningKey] | None,
 ) -> tuple[_SigningKey, ...]:
@@ -392,4 +398,5 @@ __all__ = [
     "encode_approval",
     "encode_cursor",
     "encode_ref",
+    "parse_signing_keys",
 ]

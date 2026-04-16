@@ -268,6 +268,89 @@ def test_token_bucket_rate_limiter_consumes_and_refills() -> None:
 
 
 @pytest.mark.asyncio
+async def test_pending_approval_is_not_usable_until_committed(
+    tmp_path: Path,
+) -> None:
+    """Pending approvals survive restart without becoming usable."""
+
+    payload = _approval_payload()
+    token = encode_approval(payload, signing_keys=(("kid1", _SIGNING_KEY_BYTES),))
+    actor = ApprovalActor("alice", "auth-1")
+    ledger_path = tmp_path / "approvals.jsonl"
+    ledger = ApprovalTokenLedger(ledger_path, now=lambda: 1_005)
+
+    pending = await ledger.begin_approval(token, payload, actor)
+
+    assert pending.status == "pending"
+    assert ledger.is_approved(token) is False
+    assert ledger.is_pending(token) is True
+    with pytest.raises(ModalAdapterError, match="has not been approved"):
+        await ledger.consume(token, payload, actor)
+
+    restarted = ApprovalTokenLedger(ledger_path, now=lambda: 1_006)
+    assert restarted.is_pending(token) is True
+    assert restarted.is_approved(token) is False
+    assert restarted.is_consumed(token) is False
+    with pytest.raises(ModalAdapterError, match="has not been approved"):
+        await restarted.consume(token, payload, actor)
+
+
+@pytest.mark.asyncio
+async def test_commit_approval_is_the_only_usable_transition(tmp_path: Path) -> None:
+    """Only a committed approval can be consumed by the policy middleware."""
+
+    payload = _approval_payload()
+    token = encode_approval(payload, signing_keys=(("kid1", _SIGNING_KEY_BYTES),))
+    actor = ApprovalActor("alice", "auth-1")
+    ledger_path = tmp_path / "approvals.jsonl"
+    ledger = ApprovalTokenLedger(ledger_path, now=lambda: 1_005)
+
+    pending = await ledger.begin_approval(token, payload, actor)
+    approved = await ledger.commit_approval(pending)
+
+    assert approved.status == "approved"
+    assert ledger.is_pending(token) is False
+    assert ledger.is_approved(token) is True
+    restarted = ApprovalTokenLedger(ledger_path, now=lambda: 1_006)
+    assert restarted.is_approved(token) is True
+
+    consumed = await restarted.consume(token, payload, actor)
+    assert consumed.status == "approved"
+    assert restarted.is_consumed(token) is True
+
+
+@pytest.mark.asyncio
+async def test_audit_failed_pending_approval_remains_non_usable_on_append_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Failed audit-terminal writes must still leave only non-usable durable state."""
+
+    payload = _approval_payload()
+    token = encode_approval(payload, signing_keys=(("kid1", _SIGNING_KEY_BYTES),))
+    actor = ApprovalActor("alice", "auth-1")
+    ledger_path = tmp_path / "approvals.jsonl"
+    ledger = ApprovalTokenLedger(ledger_path, now=lambda: 1_005)
+    pending = await ledger.begin_approval(token, payload, actor)
+
+    def fail_terminal_append(record_to_append: object) -> None:
+        del record_to_append
+        raise OSError("terminal append failed")
+
+    monkeypatch.setattr(ledger, "_append", fail_terminal_append)
+
+    with pytest.raises(OSError, match="terminal append failed"):
+        await ledger.mark_approval_unusable(pending)
+
+    restarted = ApprovalTokenLedger(ledger_path, now=lambda: 1_006)
+    assert restarted.is_pending(token) is True
+    assert restarted.is_approved(token) is False
+    assert restarted.is_consumed(token) is False
+    with pytest.raises(ModalAdapterError, match="has not been approved"):
+        await restarted.consume(token, payload, actor)
+
+
+@pytest.mark.asyncio
 async def test_approval_ledger_persists_approval_and_consumption(
     tmp_path: Path,
     policy_settings: Settings,
@@ -293,7 +376,9 @@ async def test_approval_ledger_persists_approval_and_consumption(
     assert restarted.is_approved(token) is True
 
     await restarted.consume(token, payload, ApprovalActor("alice", "auth-1"))
+    assert restarted.is_approved(token) is False
     consumed_restarted = ApprovalTokenLedger(ledger_path, now=lambda: 1_007)
+    assert consumed_restarted.is_approved(token) is False
     assert consumed_restarted.is_consumed(token) is True
     with pytest.raises(ModalAdapterError) as exc_info:
         await consumed_restarted.consume(
@@ -302,6 +387,36 @@ async def test_approval_ledger_persists_approval_and_consumption(
             ApprovalActor("alice", "auth-1"),
         )
     assert exc_info.value.code is ErrorCode.POLICY_BLOCKED
+
+
+@pytest.mark.asyncio
+async def test_mark_pending_approval_unusable_does_not_create_usable_state_on_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit-failure compensation starts from pending, never from usable approved."""
+
+    payload = _approval_payload()
+    token = encode_approval(payload, signing_keys=(("kid1", _SIGNING_KEY_BYTES),))
+    actor = ApprovalActor("alice", "auth-1")
+    ledger_path = tmp_path / "approvals.jsonl"
+    ledger = ApprovalTokenLedger(ledger_path, now=lambda: 1_005)
+    record = await ledger.begin_approval(token, payload, actor)
+
+    def fail_terminal_append(record_to_append: object) -> None:
+        del record_to_append
+        raise OSError("terminal append failed")
+
+    monkeypatch.setattr(ledger, "_append", fail_terminal_append)
+
+    with pytest.raises(OSError, match="terminal append failed"):
+        await ledger.mark_approval_unusable(record)
+
+    restarted = ApprovalTokenLedger(ledger_path, now=lambda: 1_006)
+    assert restarted.is_approved(token) is False
+    assert restarted.is_consumed(token) is False
+    with pytest.raises(ModalAdapterError, match="has not been approved"):
+        await restarted.consume(token, payload, ApprovalActor("alice", "auth-1"))
 
 
 @pytest.mark.asyncio
@@ -383,6 +498,49 @@ async def test_policy_middleware_consumes_approval_strips_token_and_redacts(
 
     assert ledger.is_consumed(token) is True
     assert result.structured_content == {"message": "failed with [REDACTED]"}
+
+
+@pytest.mark.asyncio
+async def test_policy_middleware_consumes_approval_after_signing_env_scrub(
+    monkeypatch: pytest.MonkeyPatch,
+    policy_settings: Settings,
+) -> None:
+    """Approval consumption must use Settings keys, not scrubbed env vars."""
+
+    monkeypatch.delenv("MODAL_MCP_SIGNING_KEYS", raising=False)
+    payload = _approval_payload()
+    token = encode_approval(payload, signing_keys=(("kid1", _SIGNING_KEY_BYTES),))
+    actor = ApprovalActor("alice", "auth-1")
+    ledger = ApprovalTokenLedger(now=lambda: 1_006)
+    await ledger.approve(token, payload, actor)
+    middleware = PolicyMiddleware(
+        policy_settings,
+        approval_ledger=ledger,
+        actor_resolver=lambda _: actor,
+        now=lambda: 1_006,
+    )
+    context = MiddlewareContext(
+        message=mt.CallToolRequestParams(
+            name="modal_stop_app",
+            arguments={
+                "dry_run": False,
+                "approval_token": token,
+                "app_ref": "mref1.app",
+            },
+        ),
+        fastmcp_context=_FakeFastMCPContext("mcp-1"),  # type: ignore[arg-type]
+        method="tools/call",
+    )
+
+    async def call_next(
+        next_context: MiddlewareContext[mt.CallToolRequestParams],
+    ) -> ToolResult:
+        del next_context
+        return ToolResult(structured_content={"ok": True})
+
+    await middleware.on_call_tool(context, call_next)
+
+    assert ledger.is_consumed(token) is True
 
 
 @pytest.mark.asyncio

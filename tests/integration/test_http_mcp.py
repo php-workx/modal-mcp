@@ -5,15 +5,22 @@ from __future__ import annotations
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from fastmcp.server.middleware import MiddlewareContext
+from fastmcp.tools.base import ToolResult
+from httpx import ASGITransport, AsyncClient
+from mcp import types as mt
 from pydantic import SecretStr
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
+import modal_mcp.server as server_module
 from modal_mcp.adapters.registry import get_modal_adapter
 from modal_mcp.asgi import OriginGuard
 from modal_mcp.config import Settings
+from modal_mcp.domain.errors import ModalAdapterError
 from modal_mcp.domain.models import (
     App,
     Container,
@@ -25,6 +32,10 @@ from modal_mcp.domain.models import (
     VolumeSummary,
     Workspace,
 )
+from modal_mcp.domain.refs import ApprovalPayload, encode_approval
+from modal_mcp.policy.approval import ApprovalTokenLedger
+from modal_mcp.policy.engine import PolicyMiddleware
+from modal_mcp.policy.rules import READ_ONLY_TOOLSETS
 from modal_mcp.server import create_asgi_app, create_mcp, fastmcp_lifespan
 
 
@@ -179,6 +190,27 @@ class FakeAdapter:
         return "stdout", "stderr"
 
 
+class FakeAuditSink:
+    """Capture approval audit events for assertions."""
+
+    def __init__(self) -> None:
+        self.records: list[tuple[str, object]] = []
+
+    def record_approval(self, action: str, record: object) -> None:
+        self.records.append((action, record))
+
+    def record_approval_denial(self, error: object, **metadata: object) -> None:
+        self.records.append(("denied", SimpleNamespace(error=error, **metadata)))
+
+
+class FailingAuditSink(FakeAuditSink):
+    """Raise when approval audit output is attempted."""
+
+    def record_approval(self, action: str, record: object) -> None:
+        del action, record
+        raise RuntimeError("audit sink write failed")
+
+
 @pytest.fixture(autouse=True)
 def clean_config_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep HTTP composition tests independent from operator env."""
@@ -194,6 +226,7 @@ def clean_config_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "MODAL_MCP_SIGNING_KEYS",
         "MODAL_MCP_AUTH_MODE",
         "MODAL_MCP_SELF_HOSTED_BEARER_TOKEN_FILE",
+        "MODAL_MCP_APPROVAL_LEDGER",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -209,6 +242,22 @@ def settings(tmp_path: Path) -> Settings:
         modal_mcp_allowed_origins=("http://127.0.0.1:8765",),
         modal_mcp_allowed_hosts=("127.0.0.1", "localhost"),
         modal_mcp_signing_keys=SecretStr("kid1:" + "a" * 64),
+    )
+
+
+@pytest.fixture
+def approval_settings(settings: Settings, tmp_path: Path) -> Settings:
+    """Return settings configured for approval endpoint coverage."""
+
+    bearer_token = tmp_path / "bearer-token"
+    bearer_token.write_text("bearer-token\n", encoding="utf-8")
+    return Settings(
+        modal_config_path=settings.modal_config_path,
+        modal_mcp_allowed_origins=settings.modal_mcp_allowed_origins,
+        modal_mcp_allowed_hosts=settings.modal_mcp_allowed_hosts,
+        modal_mcp_signing_keys=settings.modal_mcp_signing_keys,
+        modal_mcp_self_hosted_bearer_token_file=bearer_token,
+        modal_mcp_mutation_rate_limit_seconds=0,
     )
 
 
@@ -245,12 +294,491 @@ def test_create_asgi_app_mounts_fastmcp_with_origin_guard_first(
 
     app = create_asgi_app(settings, adapter_factory=adapter_factory)
 
-    route = app.routes[0]
+    approval_route = app.routes[0]
+    assert getattr(approval_route, "path", None) == "/mcp/approvals/{token}"
+    assert "POST" in getattr(approval_route, "methods", ())
+
+    route = app.routes[1]
     assert getattr(route, "path", None) == ""
     mcp_app = route.app
     assert mcp_app.state.path == "/mcp"
     assert any(middleware.cls is OriginGuard for middleware in mcp_app.user_middleware)
     assert app.router.lifespan_context is mcp_app.lifespan
+
+
+@pytest.mark.asyncio
+async def test_approval_route_state_is_consumed_by_app_composed_policy_middleware(
+    approval_settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Approval POST state must be consumed by the actual mounted policy middleware."""
+
+    change_settings = Settings(
+        modal_config_path=approval_settings.modal_config_path,
+        modal_mcp_allowed_origins=approval_settings.modal_mcp_allowed_origins,
+        modal_mcp_allowed_hosts=approval_settings.modal_mcp_allowed_hosts,
+        modal_mcp_signing_keys=approval_settings.modal_mcp_signing_keys,
+        modal_mcp_self_hosted_bearer_token_file=(
+            approval_settings.modal_mcp_self_hosted_bearer_token_file
+        ),
+        modal_mcp_mutation_rate_limit_seconds=0,
+        modal_mcp_read_only=False,
+        modal_mcp_enabled_toolsets=READ_ONLY_TOOLSETS | {"change"},
+    )
+    fake_audit = FakeAuditSink()
+    monkeypatch.setattr(server_module, "audit_sink_from_settings", lambda _: fake_audit)
+
+    async def adapter_factory(_: Settings) -> FakeAdapter:
+        return FakeAdapter()
+
+    app = create_asgi_app(change_settings, adapter_factory=adapter_factory)
+    ledger = app.state.approval_ledger
+    assert isinstance(ledger, ApprovalTokenLedger)
+
+    assert app.state.policy_approval_ledger is app.state.approval_ledger
+    assert app.state.approval_audit_sink is fake_audit
+    assert app.state.policy_audit_sink is fake_audit
+    policy_middlewares = [
+        middleware
+        for middleware in app.state.mcp.middleware
+        if isinstance(middleware, PolicyMiddleware)
+    ]
+    assert len(policy_middlewares) == 1
+    policy_middleware = policy_middlewares[0]
+    assert policy_middleware.approval_ledger is ledger
+
+    now = int(datetime.now(UTC).timestamp())
+    payload = ApprovalPayload(
+        tool_name="modal_stop_app",
+        target_refs=("mref1.app",),
+        actor="self-hosted",
+        ws="workspace-1",
+        mcp_session_id="mcp-1",
+        auth_session_id="self-hosted",
+        nonce="nonce-1",
+        env="prod",
+        exp=now + 3_600,
+        nbf=now - 60,
+        remote_mode="self_hosted_byo_token",
+    )
+    token = encode_approval(
+        payload,
+        signing_keys=(("kid1", bytes.fromhex("a" * 64)),),
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://127.0.0.1:8765",
+    ) as client:
+        response = await client.post(
+            f"/mcp/approvals/{token}",
+            headers={
+                "Authorization": "Bearer bearer-token",
+                "Host": "localhost:8765",
+                "Origin": "http://127.0.0.1:8765",
+                "Sec-Fetch-Site": "same-origin",
+                "Mcp-Session-Id": "mcp-1",
+                "X-Modal-MCP-Confirm-Approval": "approve",
+            },
+            json={
+                "tool_name": "modal_stop_app",
+                "workspace": "workspace-1",
+                "target_refs": ["mref1.app"],
+                "confirmation": "approve",
+            },
+        )
+
+    assert response.status_code == 200
+    assert ledger.is_approved(token) is True
+
+    context = MiddlewareContext(
+        message=mt.CallToolRequestParams(
+            name="modal_stop_app",
+            arguments={
+                "dry_run": False,
+                "approval_token": token,
+                "app_ref": "mref1.app",
+            },
+        ),
+        fastmcp_context=SimpleNamespace(session_id="mcp-1", client_id="self-hosted"),
+        method="tools/call",
+    )
+
+    async def call_next(
+        next_context: MiddlewareContext[mt.CallToolRequestParams],
+    ) -> ToolResult:
+        assert "approval_token" not in (next_context.message.arguments or {})
+        return ToolResult(structured_content={"ok": True})
+
+    result = await policy_middleware.on_call_tool(context, call_next)
+
+    assert result.structured_content == {"ok": True}
+    assert ledger.is_approved(token) is False
+    assert ledger.is_consumed(token) is True
+    with pytest.raises(ModalAdapterError, match="already been consumed"):
+        await policy_middleware.on_call_tool(context, call_next)
+
+
+@pytest.mark.asyncio
+async def test_post_mcp_approvals_records_approval_and_audit(
+    approval_settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A valid approval request records approval and audit output."""
+
+    fake_audit = FakeAuditSink()
+    monkeypatch.setattr(server_module, "audit_sink_from_settings", lambda _: fake_audit)
+
+    async def adapter_factory(_: Settings) -> FakeAdapter:
+        return FakeAdapter()
+
+    app = create_asgi_app(approval_settings, adapter_factory=adapter_factory)
+    ledger = app.state.approval_ledger
+    assert isinstance(ledger, ApprovalTokenLedger)
+    now = int(datetime.now(UTC).timestamp())
+
+    payload = ApprovalPayload(
+        tool_name="modal_stop_app",
+        target_refs=("mref1.app",),
+        actor="self-hosted",
+        ws="workspace-1",
+        mcp_session_id="mcp-1",
+        auth_session_id="self-hosted",
+        nonce="nonce-1",
+        env="prod",
+        exp=now + 3_600,
+        nbf=now - 60,
+        remote_mode="self_hosted_byo_token",
+    )
+    token = encode_approval(
+        payload,
+        signing_keys=(("kid1", bytes.fromhex("a" * 64)),),
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://127.0.0.1:8765",
+    ) as client:
+        response = await client.post(
+            f"/mcp/approvals/{token}",
+            headers={
+                "Authorization": "Bearer bearer-token",
+                "Host": "localhost:8765",
+                "Origin": "http://127.0.0.1:8765",
+                "Sec-Fetch-Site": "same-origin",
+                "Mcp-Session-Id": "mcp-1",
+                "X-Modal-MCP-Confirm-Approval": "approve",
+            },
+            json={
+                "tool_name": "modal_stop_app",
+                "workspace": "workspace-1",
+                "target_refs": ["mref1.app"],
+                "confirmation": "approve",
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["approval"]["status"] == "approved"
+    assert body["approval"]["tool_name"] == "modal_stop_app"
+    assert ledger.is_approved(token) is True
+    assert len(fake_audit.records) == 1
+    assert fake_audit.records[0][0] == "approved"
+
+
+@pytest.mark.asyncio
+async def test_post_mcp_approvals_rolls_back_when_audit_write_fails(
+    tmp_path: Path,
+    approval_settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit failures must not leave an approved token usable."""
+
+    durable_settings = Settings(
+        modal_config_path=approval_settings.modal_config_path,
+        modal_mcp_allowed_origins=approval_settings.modal_mcp_allowed_origins,
+        modal_mcp_allowed_hosts=approval_settings.modal_mcp_allowed_hosts,
+        modal_mcp_signing_keys=approval_settings.modal_mcp_signing_keys,
+        modal_mcp_self_hosted_bearer_token_file=(
+            approval_settings.modal_mcp_self_hosted_bearer_token_file
+        ),
+        modal_mcp_mutation_rate_limit_seconds=0,
+        modal_mcp_approval_ledger=str(tmp_path / "approvals.jsonl"),
+    )
+    fake_audit = FailingAuditSink()
+    monkeypatch.setattr(server_module, "audit_sink_from_settings", lambda _: fake_audit)
+
+    async def adapter_factory(_: Settings) -> FakeAdapter:
+        return FakeAdapter()
+
+    app = create_asgi_app(durable_settings, adapter_factory=adapter_factory)
+    ledger = app.state.approval_ledger
+    assert isinstance(ledger, ApprovalTokenLedger)
+    now = int(datetime.now(UTC).timestamp())
+
+    payload = ApprovalPayload(
+        tool_name="modal_stop_app",
+        target_refs=("mref1.app",),
+        actor="self-hosted",
+        ws="workspace-1",
+        mcp_session_id="mcp-1",
+        auth_session_id="self-hosted",
+        nonce="nonce-1",
+        env="prod",
+        exp=now + 3_600,
+        nbf=now - 60,
+        remote_mode="self_hosted_byo_token",
+    )
+    token = encode_approval(
+        payload,
+        signing_keys=(("kid1", bytes.fromhex("a" * 64)),),
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://127.0.0.1:8765",
+    ) as client:
+        response = await client.post(
+            f"/mcp/approvals/{token}",
+            headers={
+                "Authorization": "Bearer bearer-token",
+                "Host": "localhost:8765",
+                "Origin": "http://127.0.0.1:8765",
+                "Sec-Fetch-Site": "same-origin",
+                "Mcp-Session-Id": "mcp-1",
+                "X-Modal-MCP-Confirm-Approval": "approve",
+            },
+            json={
+                "tool_name": "modal_stop_app",
+                "workspace": "workspace-1",
+                "target_refs": ["mref1.app"],
+                "confirmation": "approve",
+            },
+        )
+
+    assert response.status_code == 500
+    body = response.json()
+    assert body["error"]["code"] == "INTERNAL_DRIFT"
+    assert body["error"]["message"] == "approval endpoint failed"
+    assert ledger.is_approved(token) is False
+    assert ledger.is_consumed(token) is False
+    assert ledger.is_audit_failed(token) is True
+    restarted = ApprovalTokenLedger(durable_settings.modal_mcp_approval_ledger)
+    assert restarted.is_approved(token) is False
+    assert restarted.is_consumed(token) is False
+    assert restarted.is_audit_failed(token) is True
+    assert fake_audit.records == []
+
+
+@pytest.mark.asyncio
+async def test_post_mcp_approvals_rate_limits_and_audits_denial(
+    approval_settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Approval POSTs should use mutation-rate controls and denial audit."""
+
+    rate_limited_settings = Settings(
+        modal_config_path=approval_settings.modal_config_path,
+        modal_mcp_allowed_origins=approval_settings.modal_mcp_allowed_origins,
+        modal_mcp_allowed_hosts=approval_settings.modal_mcp_allowed_hosts,
+        modal_mcp_signing_keys=approval_settings.modal_mcp_signing_keys,
+        modal_mcp_self_hosted_bearer_token_file=(
+            approval_settings.modal_mcp_self_hosted_bearer_token_file
+        ),
+        modal_mcp_mutation_rate_limit_seconds=30,
+    )
+    fake_audit = FakeAuditSink()
+    monkeypatch.setattr(server_module, "audit_sink_from_settings", lambda _: fake_audit)
+
+    async def adapter_factory(_: Settings) -> FakeAdapter:
+        return FakeAdapter()
+
+    app = create_asgi_app(rate_limited_settings, adapter_factory=adapter_factory)
+    now = int(datetime.now(UTC).timestamp())
+
+    def token_for(nonce: str) -> str:
+        payload = ApprovalPayload(
+            tool_name="modal_stop_app",
+            target_refs=("mref1.app",),
+            actor="self-hosted",
+            ws="workspace-1",
+            mcp_session_id="mcp-1",
+            auth_session_id="self-hosted",
+            nonce=nonce,
+            env="prod",
+            exp=now + 3_600,
+            nbf=now - 60,
+            remote_mode="self_hosted_byo_token",
+        )
+        return encode_approval(
+            payload,
+            signing_keys=(("kid1", bytes.fromhex("a" * 64)),),
+        )
+
+    headers = {
+        "Authorization": "Bearer bearer-token",
+        "Host": "localhost:8765",
+        "Origin": "http://127.0.0.1:8765",
+        "Sec-Fetch-Site": "same-origin",
+        "Mcp-Session-Id": "mcp-1",
+        "X-Modal-MCP-Confirm-Approval": "approve",
+    }
+    json_body = {
+        "tool_name": "modal_stop_app",
+        "workspace": "workspace-1",
+        "target_refs": ["mref1.app"],
+        "confirmation": "approve",
+    }
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://127.0.0.1:8765",
+    ) as client:
+        first = await client.post(
+            f"/mcp/approvals/{token_for('nonce-1')}",
+            headers=headers,
+            json=json_body,
+        )
+        second = await client.post(
+            f"/mcp/approvals/{token_for('nonce-2')}",
+            headers=headers,
+            json=json_body,
+        )
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "RATE_LIMITED"
+    assert [record[0] for record in fake_audit.records] == ["approved", "denied"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("request_kwargs", "match"),
+    [
+        ({"headers": {"Authorization": None}}, "authenticated actor"),
+        ({"headers": {"Authorization": "Bearer wrong-token"}}, "authenticated actor"),
+        (
+            {"headers": {"Origin": "https://evil.example.com"}},
+            "origin is not allowlisted",
+        ),
+        (
+            {"headers": {"Sec-Fetch-Site": "cross-site"}},
+            "cross-site approval requests are rejected",
+        ),
+        ({"payload_actor": "other-actor"}, "approval token actor mismatch"),
+        ({"headers": {"Mcp-Session-Id": "mcp-2"}}, "MCP session mismatch"),
+        (
+            {
+                "headers": {"X-Modal-MCP-Confirm-Approval": None},
+                "json": {"confirmation": "maybe"},
+            },
+            "confirmation",
+        ),
+        ({"path_suffix": ".tamper"}, "invalid approval token"),
+        ({"replay": True}, "already been approved"),
+    ],
+)
+async def test_post_mcp_approvals_rejects_invalid_requests_without_ledger_write(
+    approval_settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+    request_kwargs: dict[str, object],
+    match: str,
+) -> None:
+    """Invalid approval requests fail without writing approval state."""
+
+    fake_audit = FakeAuditSink()
+    monkeypatch.setattr(server_module, "audit_sink_from_settings", lambda _: fake_audit)
+
+    async def adapter_factory(_: Settings) -> FakeAdapter:
+        return FakeAdapter()
+
+    app = create_asgi_app(approval_settings, adapter_factory=adapter_factory)
+    ledger = app.state.approval_ledger
+    assert isinstance(ledger, ApprovalTokenLedger)
+    now = int(datetime.now(UTC).timestamp())
+
+    payload = ApprovalPayload(
+        tool_name="modal_stop_app",
+        target_refs=("mref1.app",),
+        actor=str(request_kwargs.get("payload_actor", "self-hosted")),
+        ws="workspace-1",
+        mcp_session_id="mcp-1",
+        auth_session_id="self-hosted",
+        nonce="nonce-1",
+        env="prod",
+        exp=now + 3_600,
+        nbf=now - 60,
+        remote_mode="self_hosted_byo_token",
+    )
+    token = encode_approval(
+        payload,
+        signing_keys=(("kid1", bytes.fromhex("a" * 64)),),
+    )
+
+    headers: dict[str, str] = {
+        "Authorization": "Bearer bearer-token",
+        "Host": "localhost:8765",
+        "Origin": "http://127.0.0.1:8765",
+        "Sec-Fetch-Site": "same-origin",
+        "Mcp-Session-Id": "mcp-1",
+        "X-Modal-MCP-Confirm-Approval": "approve",
+    }
+    headers_payload = request_kwargs.get("headers")
+    if isinstance(headers_payload, dict):
+        for key, value in headers_payload.items():
+            if value is None:
+                headers.pop(str(key), None)
+            else:
+                headers[str(key)] = str(value)
+
+    json_body: dict[str, object] = {
+        "tool_name": "modal_stop_app",
+        "workspace": "workspace-1",
+        "target_refs": ["mref1.app"],
+        "confirmation": "approve",
+    }
+    json_payload = request_kwargs.get("json")
+    if isinstance(json_payload, dict):
+        json_body.update(json_payload)
+    request_token = token + str(request_kwargs.get("path_suffix", ""))
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://127.0.0.1:8765",
+    ) as client:
+        if bool(request_kwargs.get("replay")):
+            success = await client.post(
+                f"/mcp/approvals/{token}",
+                headers=headers,
+                json=json_body,
+            )
+            assert success.status_code == 200
+            fake_audit.records.clear()
+            response = await client.post(
+                f"/mcp/approvals/{token}",
+                headers=headers,
+                json=json_body,
+            )
+        else:
+            response = await client.post(
+                f"/mcp/approvals/{request_token}",
+                headers=headers,
+                json=json_body,
+            )
+
+    assert response.status_code in {400, 401, 403}
+    body = response.json()
+    assert body["ok"] is False
+    assert match in body["error"]["message"]
+    if bool(request_kwargs.get("replay")):
+        assert ledger.is_approved(token) is True
+    else:
+        assert ledger.is_approved(token) is False
+        assert ledger.is_consumed(token) is False
+    assert [record[0] for record in fake_audit.records] == ["denied"]
+    denial = fake_audit.records[0][1]
+    assert match in denial.error.safe_message
 
 
 @pytest.mark.asyncio

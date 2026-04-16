@@ -15,6 +15,7 @@ from modal_mcp.config import (
     SECRET_ENV_KEYS,
     ConfigError,
     Settings,
+    _supports_expert_proc_masking,
     load_secret_file,
     scrub_secret_env,
 )
@@ -32,6 +33,11 @@ CONFIG_ENV_KEYS = {
     "MODAL_MCP_ALLOWED_HOSTS",
     "MODAL_MCP_AUTH_MODE",
     "MODAL_MCP_SELF_HOSTED_BEARER_TOKEN_FILE",
+    "MODAL_MCP_PUBLIC_BASE_URL",
+    "MODAL_MCP_ALLOWED_CLIENT_REDIRECT_URIS",
+    "MODAL_MCP_HOSTED_AUTH_ISSUER",
+    "MODAL_MCP_HOSTED_JWKS_URI",
+    "MODAL_MCP_HOSTED_AUDIENCE",
     "MODAL_MCP_AUTH_ISSUER",
     "MODAL_MCP_AUTH_JWKS_URI",
     "MODAL_MCP_AUTH_AUDIENCE",
@@ -201,6 +207,16 @@ def test_hosted_mode_requires_idp_and_refuses_debug_flags(
             **kwargs,
         )
 
+    with pytest.raises(ValidationError, match="MODAL_MCP_ALLOWED_REDIRECT_URIS"):
+        Settings(
+            modal_mcp_auth_mode="hosted_oauth",
+            modal_mcp_public_origin="https://mcp.example.com",
+            modal_mcp_auth_issuer="https://issuer.example.com",
+            modal_mcp_auth_jwks_uri="https://issuer.example.com/jwks.json",
+            modal_mcp_auth_audience="modal-mcp",
+            **kwargs,
+        )
+
     hosted = Settings(
         modal_mcp_auth_mode="hosted_jwt",
         modal_mcp_public_origin="https://mcp.example.com",
@@ -210,7 +226,107 @@ def test_hosted_mode_requires_idp_and_refuses_debug_flags(
         modal_mcp_allowed_redirect_uris=("https://client.example.com/cb",),
         **kwargs,
     )
-    assert hosted.modal_mcp_auth_mode == "hosted_jwt"
+    assert hosted.modal_mcp_auth_mode == "hosted_read_only_ephemeral"
+
+
+def test_hosted_mode_reports_canonical_missing_env_names(
+    modal_config_path: Path,
+) -> None:
+    """Hosted-mode config errors should name the canonical env vars."""
+
+    kwargs = base_settings_kwargs(modal_config_path)
+    with pytest.raises(ValidationError, match="MODAL_MCP_AUTH_ISSUER"):
+        Settings(modal_mcp_auth_mode="hosted_jwt", **kwargs)
+
+    with pytest.raises(ValidationError, match="MODAL_MCP_ALLOWED_REDIRECT_URIS"):
+        Settings(
+            modal_mcp_auth_mode="hosted_jwt",
+            modal_mcp_public_origin="https://mcp.example.com",
+            modal_mcp_auth_issuer="https://issuer.example.com",
+            modal_mcp_auth_jwks_uri="https://issuer.example.com/jwks.json",
+            modal_mcp_auth_audience="modal-mcp",
+            **kwargs,
+        )
+
+
+def test_hosted_mode_aliases_normalize_to_hosted_read_only_ephemeral(
+    modal_config_path: Path,
+) -> None:
+    """Legacy hosted modes normalize to the current canonical mode string."""
+
+    hosted_oauth = Settings(
+        modal_mcp_auth_mode="hosted_oauth",
+        modal_mcp_public_origin="https://mcp.example.com",
+        modal_mcp_auth_issuer="https://issuer.example.com",
+        modal_mcp_auth_jwks_uri="https://issuer.example.com/jwks.json",
+        modal_mcp_auth_audience="modal-mcp",
+        modal_mcp_allowed_redirect_uris=("https://client.example.com/cb",),
+        **base_settings_kwargs(modal_config_path),
+    )
+
+    hosted_jwt = Settings(
+        modal_mcp_auth_mode="hosted_jwt",
+        **base_settings_kwargs(modal_config_path),
+        **{
+            "MODAL_MCP_PUBLIC_BASE_URL": "https://mcp.example.com",
+            "MODAL_MCP_HOSTED_AUTH_ISSUER": "https://issuer.example.com",
+            "MODAL_MCP_HOSTED_JWKS_URI": "https://issuer.example.com/jwks.json",
+            "MODAL_MCP_HOSTED_AUDIENCE": "modal-mcp",
+            "MODAL_MCP_ALLOWED_CLIENT_REDIRECT_URIS": (
+                "https://client.example.com/cb",
+            ),
+        },
+    )
+
+    assert hosted_oauth.modal_mcp_auth_mode == "hosted_read_only_ephemeral"
+    assert hosted_jwt.modal_mcp_auth_mode == "hosted_read_only_ephemeral"
+    assert hosted_jwt.modal_mcp_public_origin == "https://mcp.example.com"
+    assert hosted_jwt.modal_mcp_auth_issuer == "https://issuer.example.com"
+    assert hosted_jwt.modal_mcp_auth_jwks_uri == "https://issuer.example.com/jwks.json"
+    assert hosted_jwt.modal_mcp_auth_audience == "modal-mcp"
+    assert hosted_jwt.modal_mcp_allowed_redirect_uris == (
+        "https://client.example.com/cb",
+    )
+
+
+def test_expert_proc_masking_helper_uses_real_proc_layout(
+    tmp_path: Path,
+) -> None:
+    """The proc masking helper should work against a real filesystem layout."""
+
+    proc_root = tmp_path / "proc"
+    self_root = proc_root / "self"
+    self_root.mkdir(parents=True)
+    (self_root / "environ").write_text("", encoding="utf-8")
+    (self_root / "maps").write_text("", encoding="utf-8")
+    (self_root / "cmdline").write_text("", encoding="utf-8")
+    (proc_root / str(os.getpid())).mkdir(parents=True)
+    (proc_root / str(os.getpid()) / "cmdline").write_text("", encoding="utf-8")
+
+    assert _supports_expert_proc_masking(
+        proc_root=proc_root,
+        mount_command_lookup=lambda _: "/usr/bin/mount",
+    )
+
+
+def test_expert_proc_masking_helper_refuses_missing_mount_binary(
+    tmp_path: Path,
+) -> None:
+    """Missing proc masking prerequisites should be rejected deterministically."""
+
+    proc_root = tmp_path / "proc"
+    self_root = proc_root / "self"
+    self_root.mkdir(parents=True)
+    (self_root / "environ").write_text("", encoding="utf-8")
+    (self_root / "maps").write_text("", encoding="utf-8")
+    (self_root / "cmdline").write_text("", encoding="utf-8")
+    (proc_root / str(os.getpid())).mkdir(parents=True)
+    (proc_root / str(os.getpid()) / "cmdline").write_text("", encoding="utf-8")
+
+    assert not _supports_expert_proc_masking(
+        proc_root=proc_root,
+        mount_command_lookup=lambda _: None,
+    )
 
 
 def test_scrub_secret_env_removes_secret_carriers(

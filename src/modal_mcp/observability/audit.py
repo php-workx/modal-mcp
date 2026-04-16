@@ -102,6 +102,22 @@ class JSONLAuditSink:
             }
         )
 
+    def record_approval_denial(
+        self,
+        error: ModalAdapterError,
+        **metadata: Any,
+    ) -> None:
+        """Record a denied approval endpoint request."""
+
+        self.write_event(
+            {
+                "type": "approval",
+                "action": "denied",
+                "error": error.to_payload().model_dump(),
+                **metadata,
+            }
+        )
+
     def write_event(self, event: Mapping[str, Any]) -> None:
         """Write one redacted JSONL audit event."""
 

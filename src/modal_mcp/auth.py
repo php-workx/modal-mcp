@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from fastmcp.server.auth import (
     AccessToken,
     MultiAuth,
+    RemoteAuthProvider,
     TokenVerifier,
 )
-from fastmcp.server.auth import (
-    StaticTokenVerifier as FastMCPStaticTokenVerifier,
-)
+from fastmcp.server.auth import StaticTokenVerifier as FastMCPStaticTokenVerifier
 from fastmcp.server.auth.providers.jwt import JWTVerifier
-from pydantic import SecretStr
+from pydantic import AnyHttpUrl, SecretStr
 
-from modal_mcp.config import Settings, load_secret_file
+from modal_mcp.config import HOSTED_AUTH_MODES, Settings, load_secret_file
 
 STATIC_BEARER_CLIENT_ID = "self-hosted"
 STATIC_BEARER_SCOPE = "modal-mcp:all"
@@ -66,7 +65,7 @@ def _load_static_bearer_verifier(settings: Settings) -> StaticTokenVerifier | No
 def _load_jwt_verifier(settings: Settings) -> JWTVerifier | None:
     """Build the hosted JWT verifier for hosted credential modes."""
 
-    if settings.modal_mcp_auth_mode not in {"hosted_jwt", "hosted_oauth"}:
+    if settings.modal_mcp_auth_mode not in HOSTED_AUTH_MODES:
         return None
     return JWTVerifier(
         jwks_uri=settings.modal_mcp_auth_jwks_uri,
@@ -76,24 +75,41 @@ def _load_jwt_verifier(settings: Settings) -> JWTVerifier | None:
     )
 
 
-def build_auth(settings: Settings) -> TokenVerifier | MultiAuth | None:
+def _build_hosted_auth_provider(settings: Settings) -> RemoteAuthProvider:
+    verifier = _load_jwt_verifier(settings)
+    if verifier is None:
+        msg = "hosted auth mode requires JWT verification settings"
+        raise ValueError(msg)
+    issuer = settings.modal_mcp_auth_issuer
+    public_origin = settings.modal_mcp_public_origin
+    if issuer is None or public_origin is None:
+        msg = "hosted auth mode requires a public origin and issuer"
+        raise ValueError(msg)
+    # FastMCP 3.2.x does not accept a redirect-allowlist parameter here.
+    # The allowlist is enforced during settings validation instead.
+    issuer_url = cast(AnyHttpUrl, issuer)
+    return RemoteAuthProvider(
+        token_verifier=verifier,
+        authorization_servers=[issuer_url],
+        base_url=public_origin,
+    )
+
+
+def build_auth(
+    settings: Settings,
+) -> TokenVerifier | MultiAuth | RemoteAuthProvider | None:
     """Build the FastMCP auth provider graph for the current settings."""
 
-    verifiers: list[TokenVerifier] = []
+    if settings.modal_mcp_auth_mode not in HOSTED_AUTH_MODES:
+        return _load_static_bearer_verifier(settings)
+
+    hosted_server = _build_hosted_auth_provider(settings)
 
     static_verifier = _load_static_bearer_verifier(settings)
-    if static_verifier is not None:
-        verifiers.append(static_verifier)
+    if static_verifier is None:
+        return hosted_server
 
-    jwt_verifier = _load_jwt_verifier(settings)
-    if jwt_verifier is not None:
-        verifiers.append(jwt_verifier)
-
-    if not verifiers:
-        return None
-    if len(verifiers) == 1:
-        return verifiers[0]
-    return MultiAuth(verifiers=verifiers)
+    return MultiAuth(server=hosted_server, verifiers=[static_verifier])
 
 
 __all__ = [

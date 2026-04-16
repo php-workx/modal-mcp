@@ -8,7 +8,7 @@ import json
 import os
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -22,8 +22,10 @@ from modal_mcp.domain.refs import ApprovalPayload, decode_approval
 APPROVAL_CONFIRMATION_HEADER = "x-modal-mcp-confirm-approval"
 APPROVAL_CONFIRMATION_VALUE = "approve"
 SAFE_FETCH_SITES = frozenset({"same-origin", "same-site"})
+RECORD_PENDING = "pending"
 RECORD_APPROVED = "approved"
 RECORD_CONSUMED = "consumed"
+RECORD_AUDIT_FAILED = "audit_failed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +50,15 @@ class ApprovalRecord:
     expires_at: int
 
 
+@dataclass(frozen=True, slots=True)
+class ApprovalCandidate:
+    """Validated approval request material that has not been made usable yet."""
+
+    token: str
+    payload: ApprovalPayload
+    actor: ApprovalActor
+
+
 class ApprovalTokenLedger:
     """Single-use approval-token ledger with optional fsync-backed persistence."""
 
@@ -60,8 +71,11 @@ class ApprovalTokenLedger:
         self.path = Path(path).expanduser() if path is not None else None
         self._now = now or (lambda: int(time.time()))
         self._lock = asyncio.Lock()
+        self._pending: dict[str, ApprovalRecord] = {}
         self._approved: dict[str, ApprovalRecord] = {}
         self._consumed: dict[str, ApprovalRecord] = {}
+        self._failed: dict[str, ApprovalRecord] = {}
+        self._records: list[ApprovalRecord] = []
         if self.path is not None:
             self._load()
 
@@ -73,22 +87,51 @@ class ApprovalTokenLedger:
     ) -> ApprovalRecord:
         """Record a human approval exactly once for a token."""
 
+        pending = await self.begin_approval(token, payload, actor)
+        return await self.commit_approval(pending)
+
+    async def begin_approval(
+        self,
+        token: str,
+        payload: ApprovalPayload,
+        actor: ApprovalActor,
+    ) -> ApprovalRecord:
+        """Persist a non-usable pending approval candidate."""
+
         token_digest = token_sha256(token)
         async with self._lock:
             self._reject_expired(payload)
-            if token_digest in self._consumed:
-                raise _policy_blocked("approval token has already been consumed")
-            if token_digest in self._approved:
-                raise _policy_blocked("approval token has already been approved")
+            self._reject_duplicate(token_digest)
             record = _record_from_payload(
                 token_digest=token_digest,
-                status=RECORD_APPROVED,
+                status=RECORD_PENDING,
                 payload=payload,
                 actor=actor,
             )
             self._append(record)
-            self._approved[token_digest] = record
+            self._pending[token_digest] = record
             return record
+
+    async def commit_approval(self, record: ApprovalRecord) -> ApprovalRecord:
+        """Make a previously pending approval usable."""
+
+        async with self._lock:
+            if record.expires_at <= self._now():
+                raise _policy_blocked("approval token has expired")
+            if record.token_digest in self._consumed:
+                raise _policy_blocked("approval token has already been consumed")
+            if record.token_digest in self._failed:
+                raise _policy_blocked("approval token is not usable")
+            pending = self._pending.get(record.token_digest)
+            if pending is None:
+                if record.token_digest in self._approved:
+                    raise _policy_blocked("approval token has already been approved")
+                raise _policy_blocked("approval token has not been staged")
+            approved = replace(pending, status=RECORD_APPROVED)
+            self._append(approved)
+            self._pending.pop(record.token_digest, None)
+            self._approved[record.token_digest] = approved
+            return approved
 
     async def consume(
         self,
@@ -103,6 +146,8 @@ class ApprovalTokenLedger:
             self._reject_expired(payload)
             if token_digest in self._consumed:
                 raise _policy_blocked("approval token has already been consumed")
+            if token_digest in self._failed:
+                raise _policy_blocked("approval token is not usable")
             approved = self._approved.get(token_digest)
             if approved is None:
                 raise _policy_blocked("approval token has not been approved")
@@ -115,21 +160,53 @@ class ApprovalTokenLedger:
             )
             self._append(record)
             self._consumed[token_digest] = record
+            self._approved.pop(token_digest, None)
             return approved
+
+    async def mark_approval_unusable(self, record: ApprovalRecord) -> ApprovalRecord:
+        """Move a staged approval into a terminal non-usable state."""
+
+        terminal_record = replace(record, status=RECORD_AUDIT_FAILED)
+        async with self._lock:
+            self._append(terminal_record)
+            self._pending.pop(record.token_digest, None)
+            self._approved.pop(record.token_digest, None)
+            self._failed[record.token_digest] = terminal_record
+            return terminal_record
 
     def is_approved(self, token: str) -> bool:
         """Return whether a token has an approval record."""
 
         return token_sha256(token) in self._approved
 
+    def is_pending(self, token: str) -> bool:
+        """Return whether a token has a non-usable pending record."""
+
+        return token_sha256(token) in self._pending
+
     def is_consumed(self, token: str) -> bool:
         """Return whether a token has been consumed."""
 
         return token_sha256(token) in self._consumed
 
+    def is_audit_failed(self, token: str) -> bool:
+        """Return whether a token failed before becoming usable."""
+
+        return token_sha256(token) in self._failed
+
     def _reject_expired(self, payload: ApprovalPayload) -> None:
         if payload.exp <= self._now():
             raise _policy_blocked("approval token has expired")
+
+    def _reject_duplicate(self, token_digest: str) -> None:
+        if token_digest in self._consumed:
+            raise _policy_blocked("approval token has already been consumed")
+        if token_digest in self._failed:
+            raise _policy_blocked("approval token is not usable")
+        if token_digest in self._approved:
+            raise _policy_blocked("approval token has already been approved")
+        if token_digest in self._pending:
+            raise _policy_blocked("approval token approval is already pending")
 
     def _load(self) -> None:
         if self.path is None or not self.path.exists():
@@ -148,13 +225,33 @@ class ApprovalTokenLedger:
                 workspace=str(raw["workspace"]),
                 expires_at=int(raw["expires_at"]),
             )
-            if record.status == RECORD_APPROVED:
-                self._approved[record.token_digest] = record
+            self._records.append(record)
+            if record.status == RECORD_PENDING:
+                if (
+                    record.token_digest not in self._approved
+                    and record.token_digest not in self._consumed
+                    and record.token_digest not in self._failed
+                ):
+                    self._pending[record.token_digest] = record
+            elif record.status == RECORD_APPROVED:
+                if (
+                    record.token_digest not in self._consumed
+                    and record.token_digest not in self._failed
+                ):
+                    self._pending.pop(record.token_digest, None)
+                    self._approved[record.token_digest] = record
             elif record.status == RECORD_CONSUMED:
+                self._pending.pop(record.token_digest, None)
+                self._approved.pop(record.token_digest, None)
                 self._consumed[record.token_digest] = record
+            elif record.status == RECORD_AUDIT_FAILED:
+                self._pending.pop(record.token_digest, None)
+                self._approved.pop(record.token_digest, None)
+                self._failed[record.token_digest] = record
 
     def _append(self, record: ApprovalRecord) -> None:
         if self.path is None:
+            self._records.append(record)
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
@@ -171,6 +268,35 @@ class ApprovalTokenLedger:
         with self.path.open("a", encoding="utf-8") as file:
             file.write(json.dumps(payload, sort_keys=True, separators=(",", ":")))
             file.write("\n")
+            file.flush()
+            os.fsync(file.fileno())
+        self._records.append(record)
+
+    def _remove_persisted_records(self, token_digest: str) -> None:
+        self._records = [
+            record for record in self._records if record.token_digest != token_digest
+        ]
+        if self.path is None:
+            return
+        if not self._records:
+            self.path.unlink(missing_ok=True)
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("w", encoding="utf-8") as file:
+            for record in self._records:
+                payload = {
+                    "token_digest": record.token_digest,
+                    "status": record.status,
+                    "actor": record.actor,
+                    "auth_session_id": record.auth_session_id,
+                    "mcp_session_id": record.mcp_session_id,
+                    "tool_name": record.tool_name,
+                    "workspace": record.workspace,
+                    "expires_at": record.expires_at,
+                    "recorded_at": self._now(),
+                }
+                file.write(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+                file.write("\n")
             file.flush()
             os.fsync(file.fileno())
 
@@ -194,6 +320,28 @@ async def approve_http_request(
     now: int | None = None,
 ) -> ApprovalRecord:
     """Validate and record an out-of-band approval HTTP request."""
+
+    candidate = await validate_approval_http_request(
+        request,
+        settings=settings,
+        approval_token=approval_token,
+        expected_env=expected_env,
+        signing_keys=signing_keys,
+        now=now,
+    )
+    return await ledger.approve(candidate.token, candidate.payload, candidate.actor)
+
+
+async def validate_approval_http_request(
+    request: Request,
+    *,
+    settings: Settings,
+    approval_token: str | None = None,
+    expected_env: str | None = None,
+    signing_keys: Sequence[tuple[str, bytes]] | None = None,
+    now: int | None = None,
+) -> ApprovalCandidate:
+    """Validate an out-of-band approval HTTP request without making it usable."""
 
     _validate_transport_controls(request, settings)
     actor = resolve_http_actor(request)
@@ -230,7 +378,7 @@ async def approve_http_request(
     _assert_optional_scope("tool_name", body, payload.tool_name)
     _assert_optional_scope("workspace", body, payload.ws)
     _assert_optional_target_refs(body, payload)
-    return await ledger.approve(token, payload, actor)
+    return ApprovalCandidate(token=token, payload=payload, actor=actor)
 
 
 def resolve_http_actor(request: Request) -> ApprovalActor:
@@ -354,11 +502,17 @@ def _policy_blocked(message: str) -> ModalAdapterError:
 __all__ = [
     "APPROVAL_CONFIRMATION_HEADER",
     "APPROVAL_CONFIRMATION_VALUE",
+    "RECORD_APPROVED",
+    "RECORD_AUDIT_FAILED",
+    "RECORD_CONSUMED",
+    "RECORD_PENDING",
     "ApprovalActor",
+    "ApprovalCandidate",
     "ApprovalRecord",
     "ApprovalTokenLedger",
     "RedisApprovalTokenLedger",
     "approve_http_request",
     "resolve_http_actor",
     "token_sha256",
+    "validate_approval_http_request",
 ]

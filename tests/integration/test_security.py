@@ -11,8 +11,10 @@ from pydantic import SecretStr, ValidationError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
+import modal_mcp.config as config
 from modal_mcp.asgi import OriginGuard, OriginValidationError, validate_origin
-from modal_mcp.config import Settings, assert_runtime_security
+from modal_mcp.config import ConfigError, Settings, assert_runtime_security
+from modal_mcp.server import create_asgi_app
 
 
 @pytest.fixture(autouse=True)
@@ -60,6 +62,25 @@ def security_settings(tmp_path: Path) -> Settings:
     )
 
 
+def hosted_settings(tmp_path: Path) -> Settings:
+    """Return hosted settings that should currently fail at startup."""
+
+    modal_config = tmp_path / "modal.toml"
+    modal_config.write_text("[default]\n", encoding="utf-8")
+    return Settings(
+        modal_config_path=modal_config,
+        modal_mcp_allowed_origins=("https://mcp.example.com",),
+        modal_mcp_allowed_hosts=("mcp.example.com",),
+        modal_mcp_signing_keys=SecretStr("kid1:" + "a" * 64),
+        modal_mcp_auth_mode="hosted_jwt",
+        modal_mcp_public_origin="https://mcp.example.com",
+        modal_mcp_auth_issuer="https://issuer.example.com",
+        modal_mcp_auth_jwks_uri="https://issuer.example.com/jwks.json",
+        modal_mcp_auth_audience="modal-mcp",
+        modal_mcp_allowed_redirect_uris=("https://client.example.com/cb",),
+    )
+
+
 def _http_scope(origin: str | None, host: str | None) -> dict[str, Any]:
     headers: list[tuple[bytes, bytes]] = []
     if host is not None:
@@ -97,6 +118,139 @@ def test_runtime_security_allows_self_hosted_defaults(tmp_path: Path) -> None:
         modal_mcp_allowed_origins=("http://127.0.0.1:8765",),
         modal_mcp_signing_keys=SecretStr("kid1:" + "a" * 64),
     )
+
+    assert_runtime_security(settings)
+
+
+def test_runtime_security_refuses_hosted_mode_until_session_resolution_exists(
+    tmp_path: Path,
+) -> None:
+    """Hosted mode must fail closed before request-scoped session support lands."""
+
+    settings = hosted_settings(tmp_path)
+
+    with pytest.raises(ConfigError, match=r"CONFIG_CONFLICT|hosted mode"):
+        assert_runtime_security(settings)
+
+
+def test_create_asgi_app_refuses_hosted_mode_before_tool_serving(
+    tmp_path: Path,
+) -> None:
+    """The ASGI entrypoint must not serve hosted mode through the global adapter."""
+
+    settings = hosted_settings(tmp_path)
+
+    async def adapter_factory(_: Settings) -> object:
+        return object()
+
+    with pytest.raises(ConfigError, match=r"CONFIG_CONFLICT|hosted mode"):
+        create_asgi_app(settings, adapter_factory=adapter_factory)
+
+
+def _expert_settings(tmp_path: Path) -> Settings:
+    """Return settings that request expert toolset enablement."""
+
+    modal_config = tmp_path / "modal.toml"
+    modal_config.write_text("[default]\\n", encoding="utf-8")
+    return Settings(
+        modal_config_path=modal_config,
+        modal_mcp_allowed_origins=("http://127.0.0.1:8765",),
+        modal_mcp_signing_keys=SecretStr("kid1:" + "a" * 64),
+        modal_mcp_enabled_toolsets=(
+            "discovery",
+            "apps",
+            "containers",
+            "logs",
+            "volumes",
+            "sandboxes",
+            "expert",
+        ),
+    )
+
+
+def test_expert_mode_refuses_non_linux_platform(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Expert mode must fail closed before startup on unsupported OSes."""
+
+    settings = _expert_settings(tmp_path)
+    monkeypatch.setattr(config.platform, "system", lambda: "Darwin")
+
+    with pytest.raises(ConfigError, match="CONFIG_CONFLICT"):
+        assert_runtime_security(settings)
+
+
+def test_expert_mode_refuses_missing_namespace_or_cgroup_support(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Expert mode requires namespace and cgroup controls for safe sandboxing."""
+
+    settings = _expert_settings(tmp_path)
+    monkeypatch.setattr(config.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(config, "_supports_expert_process_controls", lambda: True)
+    monkeypatch.setattr(config, "_supports_expert_filesystem_controls", lambda: True)
+    monkeypatch.setattr(config, "_supports_expert_network_controls", lambda: True)
+    monkeypatch.setattr(config, "_supports_expert_namespace_controls", lambda: False)
+    monkeypatch.setattr(config, "_supports_expert_cgroup_controls", lambda: False)
+    monkeypatch.setattr(
+        config,
+        "_supports_expert_proc_masking",
+        lambda *args, **kwargs: True,
+    )
+    monkeypatch.setattr(config, "_supports_expert_rlimit_controls", lambda: True)
+    monkeypatch.setattr(config, "_supports_expert_rpc_bridge", lambda: True)
+
+    with pytest.raises(ConfigError, match=r"namespace controls|cgroup controls"):
+        assert_runtime_security(settings)
+
+
+def test_expert_mode_refuses_missing_proc_masking(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If proc masking primitives are unavailable, expert startup must fail."""
+
+    settings = _expert_settings(tmp_path)
+    monkeypatch.setattr(config.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(config, "_supports_expert_process_controls", lambda: True)
+    monkeypatch.setattr(config, "_supports_expert_filesystem_controls", lambda: True)
+    monkeypatch.setattr(config, "_supports_expert_network_controls", lambda: True)
+    monkeypatch.setattr(config, "_supports_expert_namespace_controls", lambda: True)
+    monkeypatch.setattr(config, "_supports_expert_cgroup_controls", lambda: True)
+    monkeypatch.setattr(config, "_supports_expert_rlimit_controls", lambda: True)
+    monkeypatch.setattr(
+        config,
+        "_supports_expert_proc_masking",
+        lambda *args, **kwargs: False,
+    )
+    monkeypatch.setattr(config, "_supports_expert_rpc_bridge", lambda: True)
+
+    with pytest.raises(ConfigError, match="proc masking"):
+        assert_runtime_security(settings)
+
+
+def test_expert_mode_allows_supported_linux_capability_fixture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Simulated Linux capability fixture should allow expert startup gating."""
+
+    settings = _expert_settings(tmp_path)
+    monkeypatch.setattr(config.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(config, "_supports_expert_process_controls", lambda: True)
+    monkeypatch.setattr(config, "_supports_expert_filesystem_controls", lambda: True)
+    monkeypatch.setattr(config, "_supports_expert_network_controls", lambda: True)
+    monkeypatch.setattr(config, "_supports_expert_namespace_controls", lambda: True)
+    monkeypatch.setattr(config, "_supports_expert_cgroup_controls", lambda: True)
+    monkeypatch.setattr(
+        config,
+        "_supports_expert_proc_masking",
+        lambda *args, **kwargs: True,
+    )
+    monkeypatch.setattr(config, "_supports_expert_rlimit_controls", lambda: True)
+    monkeypatch.setattr(config, "_supports_expert_rpc_bridge", lambda: True)
 
     assert_runtime_security(settings)
 

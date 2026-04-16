@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from modal_mcp.config import Settings
 from modal_mcp.domain.errors import ErrorCode, ModalAdapterError
-from modal_mcp.domain.refs import decode_approval
+from modal_mcp.domain.refs import decode_approval, parse_signing_keys
 from modal_mcp.observability.redact import collect_known_secrets, redact_value
 from modal_mcp.policy.approval import (
     ApprovalActor,
@@ -79,6 +79,7 @@ class PolicyMiddleware(Middleware):
         mutation_limiter: TokenBucketRateLimiter | None = None,
         actor_resolver: ActorResolver | None = None,
         audit_sink: Any | None = None,
+        signing_keys: Sequence[tuple[str, bytes]] | None = None,
         now: Callable[[], int] | None = None,
     ) -> None:
         self.settings = settings
@@ -92,6 +93,7 @@ class PolicyMiddleware(Middleware):
         self.mutation_limiter = mutation_limiter or _default_mutation_limiter(settings)
         self.actor_resolver = actor_resolver or resolve_middleware_actor
         self.audit_sink = audit_sink or NullAuditSink()
+        self.signing_keys = tuple(signing_keys or _signing_keys_from_settings(settings))
         self.known_secrets = collect_known_secrets(settings)
         self._now = now or (lambda: int(time.time()))
         self._argument_adapter = TypeAdapter(PolicyCallArguments)
@@ -190,6 +192,7 @@ class PolicyMiddleware(Middleware):
             payload = decode_approval(
                 token,
                 expected_env=self.settings.modal_environment,
+                signing_keys=self.signing_keys,
                 now=self._now(),
             )
         except ValueError as exc:
@@ -343,6 +346,13 @@ def _default_mutation_limiter(
         capacity=1.0,
         refill_rate_per_second=1.0 / seconds,
     )
+
+
+def _signing_keys_from_settings(settings: Settings) -> tuple[tuple[str, bytes], ...]:
+    raw_keys = settings.modal_mcp_signing_keys
+    if raw_keys is None:
+        return ()
+    return parse_signing_keys(raw_keys.get_secret_value())
 
 
 def _policy_error(decision: PolicyDecision) -> ModalAdapterError:

@@ -8,7 +8,7 @@ from fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict
 
 from modal_mcp.adapters.registry import get_modal_adapter
-from modal_mcp.config import Settings
+from modal_mcp.config import AuthMode, Settings
 from modal_mcp.domain.envelope import ToolEnvelope
 from modal_mcp.domain.models import Environment, Page, Workspace
 from modal_mcp.toolsets._common import (
@@ -24,7 +24,7 @@ class ServerInfo(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    mode: str
+    mode: AuthMode
     read_only: bool
     toolsets: tuple[str, ...]
     version: str
