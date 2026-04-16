@@ -1,2 +1,1 @@
 """modal_mcp package."""
-

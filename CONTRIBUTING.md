@@ -32,3 +32,39 @@ artifact is a valid release.
 - include tests or verification where behavior changes
 - avoid unrelated refactors in the same PR
 - describe user-facing impact clearly in the PR body
+
+## Local quality gates
+
+Install the local command runners before using the validation targets:
+
+```bash
+brew install just shellcheck actionlint gitleaks semgrep
+```
+
+On Linux, install the same tools with your package manager or the upstream
+release packages.
+
+Install the local tools and git hooks once per worktree:
+
+```bash
+just setup
+```
+
+The checked-in hooks delegate to the same `just` targets used by maintainers:
+
+```bash
+just pre-commit   # format, lint, type check, schema drift, fast tests
+just pre-push     # pre-commit gate, full tests, vulnerability/security scans
+just check-local  # pre-push gate plus workflow and hook linting
+```
+
+Use targeted commands while iterating:
+
+```bash
+just format
+just lint
+just type-check
+just test-fast
+just vuln
+just semgrep
+```

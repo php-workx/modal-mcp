@@ -72,11 +72,20 @@ See [docs/self-hosting.md](docs/self-hosting.md) and
 
 ## Validation
 
+Install the local command runners before using the validation targets:
+
 ```bash
-uv run pytest -q
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy src
+brew install just shellcheck actionlint gitleaks semgrep
+```
+
+On Linux, install the same tools with your package manager or the upstream
+release packages, then run:
+
+```bash
+just setup
+just pre-commit
+just pre-push
+just check-local
 ```
 
 Live Modal tests are opt-in:

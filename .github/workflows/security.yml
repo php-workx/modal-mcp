@@ -47,14 +47,40 @@ jobs:
         with:
           enable-cache: true
 
+      - name: Install Just
+        run: sudo apt-get update && sudo apt-get install -y just
+
       - name: Install locked dependencies
         run: uv sync --frozen --extra dev
 
       - name: Run pip-audit against locked dependencies
+        run: just vuln
+
+  semgrep:
+    name: Semgrep
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Semgrep gate tools
         run: |
-          audit_requirements="$(mktemp)"
-          uv export --frozen --extra dev --no-emit-project --format requirements-txt > "$audit_requirements"
-          uv run pip-audit --strict --disable-pip --no-deps -r "$audit_requirements"
+          sudo apt-get update
+          sudo apt-get install -y just
+          python -m pip install --upgrade pip
+          python -m pip install semgrep
+
+      - name: Run Semgrep
+        env:
+          SEMGREP_SEND_METRICS: "off"
+        run: just semgrep
 
   secret-scan:
     name: Secret scanner
