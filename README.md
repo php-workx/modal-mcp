@@ -86,6 +86,7 @@ just setup
 just pre-commit
 just pre-push
 just check-local
+just uv-audit  # optional local uv.lock dependency audit
 ```
 
 Live Modal tests are opt-in:

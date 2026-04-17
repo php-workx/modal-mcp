@@ -66,5 +66,6 @@ just lint
 just type-check
 just test-fast
 just vuln
+just uv-audit
 just semgrep
 ```

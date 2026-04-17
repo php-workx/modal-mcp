@@ -120,6 +120,10 @@ vuln:
     uv export --frozen --extra dev --no-emit-project --format requirements-txt > "$audit_requirements"
     uv run pip-audit --strict --disable-pip -r "$audit_requirements"
 
+# Local alternative dependency audit against uv.lock.
+uv-audit:
+    uv audit --preview-features audit --frozen
+
 # Scan git history for leaked secrets.
 trufflehog:
     @command -v trufflehog >/dev/null 2>&1 || { echo "error: trufflehog is required for this gate" >&2; exit 127; }
