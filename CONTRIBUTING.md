@@ -38,7 +38,7 @@ artifact is a valid release.
 Install the local command runners before using the validation targets:
 
 ```bash
-brew install just shellcheck actionlint gitleaks semgrep
+brew install just shellcheck actionlint trufflehog semgrep
 ```
 
 On Linux, install the same tools with your package manager or the upstream

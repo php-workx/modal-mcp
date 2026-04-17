@@ -57,7 +57,7 @@ jobs:
         run: just vuln
 
   semgrep:
-    name: Semgrep
+    name: Semantic Scan
     runs-on: ubuntu-latest
     container:
       image: semgrep/semgrep
@@ -68,16 +68,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Semgrep
-        run: |
-          semgrep scan --config auto --error --quiet \
-            --exclude='.agents' \
-            --exclude='.mypy_cache' \
-            --exclude='.pytest_cache' \
-            --exclude='.ruff_cache' \
-            --exclude='.serena' \
-            --exclude='.tickets' \
-            --exclude='.venv' \
-            .
+        run: semgrep scan --config auto --error .
 
   trufflehog:
     name: Secret Scan
@@ -93,7 +84,7 @@ jobs:
       - name: Scan repository for secrets
         uses: trufflesecurity/trufflehog@main
         with:
-          extra_args: --results=verified,unknown
+          extra_args: --results=verified,unknown --fail
 
   codeql:
     name: CodeQL

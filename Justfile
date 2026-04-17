@@ -109,7 +109,7 @@ schema-update:
 # --- Security ---
 
 # Security gate: dependency vulnerabilities, secret scan, and SAST.
-security: vuln gitleaks semgrep
+security: vuln trufflehog semgrep
 
 # Scan locked Python dependencies for known vulnerabilities.
 vuln:
@@ -121,22 +121,14 @@ vuln:
     uv run pip-audit --strict --disable-pip -r "$audit_requirements"
 
 # Scan git history for leaked secrets.
-gitleaks:
-    @command -v gitleaks >/dev/null 2>&1 || { echo "error: gitleaks is required for this gate" >&2; exit 127; }
-    gitleaks git --no-banner
+trufflehog:
+    @command -v trufflehog >/dev/null 2>&1 || { echo "error: trufflehog is required for this gate" >&2; exit 127; }
+    trufflehog git file://"$PWD" --results=verified,unknown --fail --no-update
 
 # Run Semgrep SAST.
 semgrep:
     @command -v semgrep >/dev/null 2>&1 || { echo "error: semgrep is required for this gate" >&2; exit 127; }
-    semgrep scan --config auto --error --quiet \
-        --exclude='.agents' \
-        --exclude='.mypy_cache' \
-        --exclude='.pytest_cache' \
-        --exclude='.ruff_cache' \
-        --exclude='.serena' \
-        --exclude='.tickets' \
-        --exclude='.venv' \
-        .
+    semgrep scan --config auto --error .
 
 # --- Packaging ---
 
