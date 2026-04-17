@@ -59,31 +59,28 @@ jobs:
   semgrep:
     name: Semgrep
     runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
     timeout-minutes: 20
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install Semgrep gate tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y just
-          python -m pip install --upgrade pip
-          python -m pip install semgrep
-
       - name: Run Semgrep
-        env:
-          SEMGREP_SEND_METRICS: "off"
-        run: just semgrep
+        run: |
+          semgrep scan --config auto --error --quiet \
+            --exclude='.agents' \
+            --exclude='.mypy_cache' \
+            --exclude='.pytest_cache' \
+            --exclude='.ruff_cache' \
+            --exclude='.serena' \
+            --exclude='.tickets' \
+            --exclude='.venv' \
+            .
 
-  secret-scan:
-    name: Secret scanner
+  trufflehog:
+    name: Secret Scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -94,9 +91,9 @@ jobs:
           fetch-depth: 0
 
       - name: Scan repository for secrets
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --results=verified,unknown
 
   codeql:
     name: CodeQL

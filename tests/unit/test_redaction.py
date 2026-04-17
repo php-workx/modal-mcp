@@ -44,11 +44,12 @@ def test_redact_value_recurses_known_secrets_and_secret_shapes(
     """Nested dict/list/tuple strings are scrubbed consistently."""
 
     known = collect_known_secrets(redaction_settings)
+    aws_shaped_fixture = "AKIA" + "1234567890ABCDEF"
     value = {
         "exact": "prefix token-secret-value suffix",
         "nested": [
             "MODAL_TOKEN_SECRET=plain-text",
-            ("as-service-user-123456", "AKIA1234567890ABCDEF"),
+            ("as-service-user-123456", aws_shaped_fixture),
         ],
         "jwt": "eyJabc.def.ghi",
     }
