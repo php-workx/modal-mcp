@@ -75,7 +75,7 @@ See [docs/self-hosting.md](docs/self-hosting.md) and
 Install the local command runners before using the validation targets:
 
 ```bash
-brew install just shellcheck actionlint trufflehog semgrep
+brew install just shellcheck actionlint gitleaks semgrep
 ```
 
 On Linux, install the same tools with your package manager or the upstream
@@ -88,6 +88,9 @@ just pre-push
 just check-local
 just uv-audit  # optional local uv.lock dependency audit
 ```
+
+Local secret scanning uses Gitleaks through the `just` targets. CI runs
+TruffleHog for repository secret scanning.
 
 Live Modal tests are opt-in:
 

@@ -108,8 +108,8 @@ schema-update:
 
 # --- Security ---
 
-# Security gate: dependency vulnerabilities, secret scan, and SAST.
-security: vuln trufflehog semgrep
+# Security gate: dependency vulnerabilities, local secret scan, and SAST.
+security: vuln gitleaks semgrep
 
 # Scan locked Python dependencies for known vulnerabilities.
 vuln:
@@ -124,10 +124,10 @@ vuln:
 uv-audit:
     uv audit --preview-features audit --frozen
 
-# Scan git history for leaked secrets.
-trufflehog:
-    @command -v trufflehog >/dev/null 2>&1 || { echo "error: trufflehog is required for this gate" >&2; exit 127; }
-    trufflehog git file://"$PWD" --results=verified,unknown --fail --no-update
+# Scan git history for leaked secrets locally. CI uses TruffleHog.
+gitleaks:
+    @command -v gitleaks >/dev/null 2>&1 || { echo "error: gitleaks is required for this gate" >&2; exit 127; }
+    gitleaks git --no-banner
 
 # Run Semgrep SAST.
 semgrep:
