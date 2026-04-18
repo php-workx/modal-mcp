@@ -8,13 +8,9 @@ service-user credentials.
 from __future__ import annotations
 
 import os
-import sys
-from pathlib import Path
 
 import pytest
 from pydantic import SecretStr
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from modal_mcp.adapters.modal_adapter import ModalSdkAdapter
 from modal_mcp.config import Settings

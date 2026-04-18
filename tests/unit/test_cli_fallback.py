@@ -5,11 +5,8 @@ from __future__ import annotations
 import importlib
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 
 def test_default_import_tree_does_not_pull_in_cli_fallback() -> None:

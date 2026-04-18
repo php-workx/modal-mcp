@@ -44,6 +44,7 @@ managed = true
 override-dependencies = ["pydantic>=2.7,<2.10"]
 
 [tool.pytest.ini_options]
+pythonpath = ["src"]
 markers = [
   "hosted_mutating_live: Non-production live checks for hosted mutating tool semantics. Set MODAL_MCP_LIVE=1 and MODAL_MCP_MUTATING_SEMANTICS=1 to run.",
 ]

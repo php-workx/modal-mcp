@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 import json
-import sys
 from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
 import pytest
+from fastmcp.server.middleware import MiddlewareContext
 from mcp import types as mt
 from pydantic import SecretStr
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-
-from fastmcp.server.middleware import MiddlewareContext
 
 from modal_mcp.config import Settings
 from modal_mcp.domain.errors import ErrorCode, ModalAdapterError

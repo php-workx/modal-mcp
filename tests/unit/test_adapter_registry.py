@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import sys
 from collections.abc import AsyncIterator, Mapping
-from pathlib import Path
 from typing import Any
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from modal_mcp.adapters.base import ModalAdapter
 from modal_mcp.adapters.registry import bind_modal_adapter, get_modal_adapter

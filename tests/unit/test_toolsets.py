@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 from fastmcp import FastMCP
 from pydantic import SecretStr
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from modal_mcp.config import Settings
 from modal_mcp.toolsets.change import register_change_tools
