@@ -998,7 +998,7 @@ Deliverables:
 
 Tests:
 
-- Protocol conformance: initialise, tools/list, tools/call
+- Protocol conformance: initialize, tools/list, tools/call
 - `notifications/tools/list_changed` (even if toolset toggling disabled, implement and test the code path)
 - Origin validation, auth required in remote mode citeturn43view0
 
@@ -1085,4 +1085,3 @@ Maintenance model to maximise trust (solo dev)
 | MCP reference servers repo | TypeScript monorepo with workspaces citeturn15view0turn14view1 | Mixed: transition MIT → Apache-2.0 citeturn45view2turn45view3 | Very high activity; explicitly **not production-ready** (educational examples) citeturn14view2 | Copy patterns, not code: minimal safe examples; clarity of primitives; avoid assuming production hardening |
 
 These references collectively support the architectural decisions above: strict schema+structured outputs, toolset gating, read-only-first safety, and token-efficiency as a first-order feature.
-

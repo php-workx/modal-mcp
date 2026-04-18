@@ -4,7 +4,7 @@
 
 ---
 
-### F1. `ctx.get_state` is awaited in v3 — the `modal_list_apps` sketch will blow up with `AttributeError`/coroutine-never-awaited
+## F1. `ctx.get_state` is awaited in v3 — the `modal_list_apps` sketch will blow up with `AttributeError`/coroutine-never-awaited
 
 **Severity:** Critical
 
@@ -23,7 +23,7 @@
 **Why it matters:** The plan's entire request-scoped dependency injection story rests on one line: `await mcp.set_default_state("modal_adapter", adapter)` inside the lifespan. There is no such method on `FastMCP` in 3.2.x. The only state APIs are `ctx.set_state` / `ctx.get_state` / `ctx.delete_state`, and they are **session-scoped** — FastMCP's own docs are explicit: "Store data that persists across multiple requests within the same MCP session. Session state is automatically keyed by the client's session, ensuring isolation between different clients." State written inside a Starlette lifespan hook is not attached to any session at all, so even if a `set_default_state` did exist, you could not seed session state from a lifespan — there's no session yet. The adapter is a process-wide singleton; the mechanism the plan picked is per-client. An implementer discovers this on day one of v0 and has to redesign how every tool gets its adapter.
 
 **Evidence from the plan:** v2:§5.4, L721–L729:
-```
+```python
 @asynccontextmanager
 async def lifespan(app):
     adapter = await ModalAdapter.create(settings)
@@ -49,7 +49,7 @@ Either way, the §5.2 sketch needs to stop reading the adapter from `ctx.get_sta
 **Why it matters:** FastMCP 3.x exposes middleware as a **class-based** API: you subclass `fastmcp.server.middleware.Middleware` and override `on_call_tool`, `on_message`, etc., with a signature of `(self, context: MiddlewareContext, call_next)`. There is no `@tool_call_middleware` decorator in `fastmcp.server.middleware` — it does not exist. The plan's `policy_middleware` function will fail to import. Even if a decorator by that name existed, the `(ctx, tool_name, arguments, call_next)` shape doesn't match any FastMCP middleware hook: `tool_name` and `arguments` live on `context.message` / `context.message.params`, not as positional parameters. The plan also writes `mcp.add_middleware` nowhere — the §7.6 sketch is a floating decorator that is never registered with the server. Implementer discovers this the moment they wire in the policy engine (~day 2 of v0).
 
 **Evidence from the plan:** v2:§7.6, L1229–L1248:
-```
+```python
 from fastmcp.server.middleware import tool_call_middleware
 
 @tool_call_middleware
@@ -91,7 +91,7 @@ Register with `mcp.add_middleware(PolicyMiddleware())` in `server.py`. Related g
 On top of that, the plan uses `Mount("/" , ...)` at the root AND expects a `/mcp` endpoint — but `http_app` / `streamable_http_app` already mount at `/mcp` internally, so mounting at `/` is just duplicative. The plan also passes middleware via Starlette's `middleware=[...]` kwarg, but FastMCP recommends `mcp.http_app(middleware=[...])` so that middleware wraps the FastMCP ASGI app *including* its lifespan.
 
 **Evidence from the plan:** v2:§3.4, L276–L293:
-```
+```python
 app = Starlette(
     routes=[...],
     middleware=[...],

@@ -152,7 +152,7 @@ drop MCP SDK maturity.
 
 ### 3.2 Adapter strategy: CLI primary, TS SDK for sandboxes, Python sidecar deferred
 
-```
+```text
 ┌───────────────────────────┐
 │   MCP server core (TS)    │
 │   transport · schemas ·   │
@@ -1329,7 +1329,7 @@ sequenceDiagram
 | `MODAL_MCP_SIGNING_KEY` | required | HMAC key for Ref/Cursor/approval tokens. |
 | `MODAL_MCP_AUDIT_LOG` | stdout | Audit log sink (file path or `stdout`). |
 | `MODAL_MCP_RATE_LIMIT_RPS` | `5` | Per-session tool-call budget. |
-| `MODAL_MCP_LOG_LEVEL` | `info` | `trace|debug|info|warn|error`. |
+| `MODAL_MCP_LOG_LEVEL` | `info` | `trace\|debug\|info\|warn\|error`. |
 | `MODAL_MCP_OTEL_EXPORTER` | unset | OTLP endpoint for traces/metrics. |
 | `MODAL_MCP_DEBUG_EXPOSE_IDS` | `false` | Expose native Modal IDs (`ap-*`, `ta-*`) in outputs. **Self-hosted mode only** — ignored in any hosted credential mode. |
 | `MODAL_MCP_ALLOW_CROSS_ENV` | `false` | Allow tools across environments. |

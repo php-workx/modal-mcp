@@ -20,4 +20,4 @@ scaffold-only and should fail fast if required identifiers are absent.
 
 ## Cross-link
 
-See the full verification field plan in `[live-modal-semantics.md](/Users/runger/workspaces/modal-mcp/docs/live-modal-semantics.md)`.
+See the full verification field plan in `[live-modal-semantics.md](../live-modal-semantics.md)`.

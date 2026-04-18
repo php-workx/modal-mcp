@@ -28,7 +28,7 @@ has no network" as a specific concrete construction you can attack.
 
 ## Target document
 
-`/Users/runger/workspaces/modal-mcp/docs/specs/modal-mcp_v2.md`
+`docs/specs/modal-mcp_v2.md`
 
 The document is ~1900 lines in 16 sections. The sections most
 relevant to you are:

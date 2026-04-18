@@ -18,8 +18,8 @@ non-evidence; real non-production execution remains a future ticket in
 - Verified evidence: none. This document is a scaffold, not a result.
 - Scaffolded assertions: the fake mode test harness can validate the behavior
   matrix and the documentation contract without calling Modal mutation APIs.
-- Planned execution: non-prod mutation execution remains gated by explicit
-  resource identifiers and is not yet enabled.
+- Planned execution: every non-`fake` mode fails fast as not implemented; future
+  non-prod mutation execution will require explicit resource identifiers.
 
 ## 3) Non-prod gating
 
@@ -30,10 +30,9 @@ non-evidence; real non-production execution remains a future ticket in
 - Harness mode:
   - `MODAL_MCP_MUTATING_SEMANTICS_MODE=fake` runs local behavior-field
     assertions only.
-  - Any other mode is treated as a non-prod execution attempt and requires
-    explicit resource identifiers.
-  - Missing resource identifiers must fail with a setup error, not a silent
-    skip.
+  - Any non-`fake` mode fails fast as not implemented.
+  - Missing resource identifiers will be a setup error only after future
+    non-prod execution support exists.
 - Scope:
   - Checks are opt-in.
   - Normal CI and local default runs skip these tests.
@@ -70,7 +69,7 @@ non-evidence; real non-production execution remains a future ticket in
 
 This document defines scaffold-only, non-prod live verification. It does **not**
 enable hosted mutating tools. Fake mode is the only executable path in this
-ticket. Non-prod execution attempts without explicit resource identifiers must
-fail fast with a setup error instead of quietly skipping.
+ticket. Non-`fake` modes fail fast as not implemented; they must not attempt a
+Modal mutation path until future non-prod execution support exists.
 
 Reference harness: `tests/integration/live/test_hosted_mutation_semantics.py`.
