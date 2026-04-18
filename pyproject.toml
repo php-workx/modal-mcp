@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "modal-mcp"
+version = "0.1.0"
+description = "Self-hosted Modal MCP server"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+dependencies = [
+  "fastmcp>=3.2,<3.3",
+  "modal>=1.4.1,<1.5",
+  "pydantic>=2.7,<2.10",
+  "pydantic-settings",
+  "starlette",
+  "uvicorn",
+  "structlog",
+  "opentelemetry-api",
+  "opentelemetry-sdk",
+  "opentelemetry-instrumentation-starlette",
+  "cbor2>=5.6",
+  "cryptography",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-asyncio",
+  "pytest-cov",
+  "mypy",
+  "ruff",
+  "httpx",
+  "pip-audit",
+  "pre-commit",
+]
+
+[project.scripts]
+modal-mcp = "modal_mcp.__main__:main"
+
+[tool.uv]
+managed = true
+override-dependencies = ["pydantic>=2.7,<2.10"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+markers = [
+  "hosted_mutating_live: Non-production live checks for hosted mutating tool semantics. Set MODAL_MCP_LIVE=1 and MODAL_MCP_MUTATING_SEMANTICS=1 to run.",
+]
+filterwarnings = [
+  "ignore:.*typing\\.Dict.*deprecated by PEP 585.*:beartype.roar.BeartypeDecorHintPep585DeprecationWarning:key_value\\.aio\\.adapters\\.pydantic\\.adapter",
+]

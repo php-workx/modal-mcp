@@ -1,2 +1,17 @@
 .agents
+.serena
+.verk
 .tickets
+.coverage
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+__pycache__/
+build/
+coverage.xml
+dist/
+htmlcov/
+
+# AgentOps session artifacts (auto-added)
+.agents/

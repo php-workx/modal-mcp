@@ -1,0 +1,5303 @@
+{
+  "compatibility": {
+    "additive_changes": "allowed",
+    "renames_type_changes_removals": "require v2 and retain v1 for one release"
+  },
+  "schema_version": "v1",
+  "tools": [
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": "Compare deployment presence; detailed diff fields are v1 placeholders.",
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_compare_deployments",
+      "output_schema": {
+        "$defs": {
+          "DeploymentComparison": {
+            "description": "Small deployment comparison result.",
+            "properties": {
+              "diff": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "diff"
+            ],
+            "type": "object"
+          },
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DeploymentComparison"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "app_ref": {
+            "type": "string"
+          },
+          "base_version": {
+            "type": "integer"
+          },
+          "candidate_version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "app_ref",
+          "base_version",
+          "candidate_version"
+        ],
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "apps",
+        "logs"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_diagnose_app_startup",
+      "output_schema": {
+        "$defs": {
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "StartupDiagnosis": {
+            "description": "Structured startup diagnosis payload.",
+            "properties": {
+              "diagnosis": {
+                "type": "object"
+              },
+              "evidence": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "diagnosis",
+              "evidence"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StartupDiagnosis"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "app_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "app_ref"
+        ],
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "apps",
+        "logs"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_discovery_server_info",
+      "output_schema": {
+        "$defs": {
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "ServerInfo": {
+            "additionalProperties": false,
+            "description": "Fixed-schema model-visible server metadata.",
+            "properties": {
+              "mode": {
+                "enum": [
+                  "hosted_read_only_ephemeral",
+                  "self_hosted_byo_token"
+                ],
+                "type": "string"
+              },
+              "protocol_version": {
+                "const": "2025-06-18",
+                "default": "2025-06-18",
+                "enum": [
+                  "2025-06-18"
+                ],
+                "type": "string"
+              },
+              "read_only": {
+                "type": "boolean"
+              },
+              "toolsets": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "mode",
+              "read_only",
+              "toolsets",
+              "version"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ServerInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "discovery"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_get_app",
+      "output_schema": {
+        "$defs": {
+          "App": {
+            "description": "Application summary returned by the adapter.",
+            "properties": {
+              "app_ref": {
+                "type": "string"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "environment_ref": {
+                "type": "string"
+              },
+              "n_running_tasks": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "stopped_at": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "app_ref",
+              "created_at",
+              "description",
+              "environment_ref",
+              "n_running_tasks",
+              "name",
+              "state"
+            ],
+            "type": "object"
+          },
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/App"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "app_ref": {
+            "type": "string"
+          },
+          "environment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "app_ref"
+        ],
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "apps"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_get_app_logs",
+      "output_schema": {
+        "$defs": {
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "LogEntry": {
+            "description": "Single log record returned by the adapter.",
+            "properties": {
+              "app_ref": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "container_ref": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "dedup_key": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "function_call_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "function_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              },
+              "sandbox_ref": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "source": {
+                "type": "string"
+              },
+              "ts": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "message",
+              "source"
+            ],
+            "type": "object"
+          },
+          "LogSummary": {
+            "description": "Summary metadata for a log response.",
+            "properties": {
+              "deduped_count": {
+                "type": "integer"
+              },
+              "error_signatures": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "top_sources": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "total_entries": {
+                "type": "integer"
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "deduped_count",
+              "error_signatures",
+              "top_sources",
+              "total_entries",
+              "truncated"
+            ],
+            "type": "object"
+          },
+          "LogsPage": {
+            "description": "Paged log response with summary metadata.",
+            "properties": {
+              "entries": {
+                "items": {
+                  "$ref": "#/$defs/LogEntry"
+                },
+                "type": "array"
+              },
+              "next_cursor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "stream_reset": {
+                "default": false,
+                "type": "boolean"
+              },
+              "summary": {
+                "$ref": "#/$defs/LogSummary"
+              }
+            },
+            "required": [
+              "entries",
+              "summary"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LogsPage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "app_ref": {
+            "type": "string"
+          },
+          "function_call_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "function_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 200
+          },
+          "sandbox_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "search_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "app_ref"
+        ],
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "apps",
+        "logs"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_get_container",
+      "output_schema": {
+        "$defs": {
+          "Container": {
+            "description": "Task container summary returned by the adapter.",
+            "properties": {
+              "app_ref": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "container_ref": {
+                "type": "string"
+              },
+              "finished_at": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "function_call_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "function_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "region": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "started_at": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "state": {
+                "type": "string"
+              },
+              "task_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "container_ref",
+              "state",
+              "task_id"
+            ],
+            "type": "object"
+          },
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Container"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "container_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "container_ref"
+        ],
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "containers"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_get_container_logs",
+      "output_schema": {
+        "$defs": {
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "LogEntry": {
+            "description": "Single log record returned by the adapter.",
+            "properties": {
+              "app_ref": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "container_ref": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "dedup_key": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "function_call_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "function_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              },
+              "sandbox_ref": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "source": {
+                "type": "string"
+              },
+              "ts": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "message",
+              "source"
+            ],
+            "type": "object"
+          },
+          "LogSummary": {
+            "description": "Summary metadata for a log response.",
+            "properties": {
+              "deduped_count": {
+                "type": "integer"
+              },
+              "error_signatures": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "top_sources": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "total_entries": {
+                "type": "integer"
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "deduped_count",
+              "error_signatures",
+              "top_sources",
+              "total_entries",
+              "truncated"
+            ],
+            "type": "object"
+          },
+          "LogsPage": {
+            "description": "Paged log response with summary metadata.",
+            "properties": {
+              "entries": {
+                "items": {
+                  "$ref": "#/$defs/LogEntry"
+                },
+                "type": "array"
+              },
+              "next_cursor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "stream_reset": {
+                "default": false,
+                "type": "boolean"
+              },
+              "summary": {
+                "$ref": "#/$defs/LogSummary"
+              }
+            },
+            "required": [
+              "entries",
+              "summary"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LogsPage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "container_ref": {
+            "type": "string"
+          },
+          "function_call_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "function_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 200
+          },
+          "sandbox_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "search_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "container_ref"
+        ],
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "containers",
+        "logs"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_get_environment",
+      "output_schema": {
+        "$defs": {
+          "Environment": {
+            "description": "Environment summary returned by the adapter.",
+            "properties": {
+              "created_at": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "environment_ref": {
+                "type": "string"
+              },
+              "is_default": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "web_suffix": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "environment_ref",
+              "is_default",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Environment"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "environment_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "environment_name"
+        ],
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "discovery"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_get_sandbox",
+      "output_schema": {
+        "$defs": {
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "SandboxSummary": {
+            "description": "Sandbox summary returned by the adapter.",
+            "properties": {
+              "app_ref": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "name": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "returncode": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "sandbox_id": {
+                "type": "string"
+              },
+              "sandbox_ref": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "created_at",
+              "sandbox_id",
+              "sandbox_ref",
+              "status",
+              "tags"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SandboxSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "sandbox_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sandbox_ref"
+        ],
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "sandboxes"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_get_sandbox_stdio",
+      "output_schema": {
+        "$defs": {
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "SandboxStdio": {
+            "description": "Bounded sandbox stdio payload.",
+            "properties": {
+              "stderr": {
+                "type": "string"
+              },
+              "stdout": {
+                "type": "string"
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "stderr",
+              "stdout",
+              "truncated"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SandboxStdio"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "sandbox_ref": {
+            "type": "string"
+          },
+          "tail_bytes": {
+            "default": 8192,
+            "maximum": 65536,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sandbox_ref"
+        ],
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "sandboxes"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_list_app_deployments",
+      "output_schema": {
+        "$defs": {
+          "CommitInfo": {
+            "description": "Version-control metadata attached to a deployment.",
+            "properties": {
+              "author_email": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "author_name": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "branch": {
+                "type": "string"
+              },
+              "commit_hash": {
+                "type": "string"
+              },
+              "commit_timestamp": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "dirty": {
+                "type": "boolean"
+              },
+              "repo_url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "vcs": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "branch",
+              "commit_hash",
+              "commit_timestamp",
+              "dirty",
+              "vcs"
+            ],
+            "type": "object"
+          },
+          "Deployment": {
+            "description": "Normalized deployment history entry.",
+            "properties": {
+              "client_version": {
+                "type": "string"
+              },
+              "commit": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/CommitInfo"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "deployed_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "deployed_by": {
+                "type": "string"
+              },
+              "deployed_by_avatar_url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "image_digest": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "rollback_allowed": {
+                "type": "boolean"
+              },
+              "rollback_version": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "status": {
+                "enum": [
+                  "active",
+                  "rolled_back",
+                  "superseded",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              "tag": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "version": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "client_version",
+              "deployed_at",
+              "deployed_by",
+              "rollback_allowed",
+              "status",
+              "version"
+            ],
+            "type": "object"
+          },
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "Page_Deployment_": {
+            "properties": {
+              "items": {
+                "items": {
+                  "$ref": "#/$defs/Deployment"
+                },
+                "type": "array"
+              },
+              "next_cursor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "items",
+              "truncated"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Page_Deployment_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "app_ref": {
+            "type": "string"
+          },
+          "environment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "app_ref"
+        ],
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "apps"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_list_apps",
+      "output_schema": {
+        "$defs": {
+          "App": {
+            "description": "Application summary returned by the adapter.",
+            "properties": {
+              "app_ref": {
+                "type": "string"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "environment_ref": {
+                "type": "string"
+              },
+              "n_running_tasks": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "stopped_at": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "app_ref",
+              "created_at",
+              "description",
+              "environment_ref",
+              "n_running_tasks",
+              "name",
+              "state"
+            ],
+            "type": "object"
+          },
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "Page_App_": {
+            "properties": {
+              "items": {
+                "items": {
+                  "$ref": "#/$defs/App"
+                },
+                "type": "array"
+              },
+              "next_cursor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "items",
+              "truncated"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Page_App_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "environment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "apps"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_list_containers",
+      "output_schema": {
+        "$defs": {
+          "Container": {
+            "description": "Task container summary returned by the adapter.",
+            "properties": {
+              "app_ref": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "container_ref": {
+                "type": "string"
+              },
+              "finished_at": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "function_call_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "function_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "region": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "started_at": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "state": {
+                "type": "string"
+              },
+              "task_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "container_ref",
+              "state",
+              "task_id"
+            ],
+            "type": "object"
+          },
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "Page_Container_": {
+            "properties": {
+              "items": {
+                "items": {
+                  "$ref": "#/$defs/Container"
+                },
+                "type": "array"
+              },
+              "next_cursor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "items",
+              "truncated"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Page_Container_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "app_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "environment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "containers"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_list_environments",
+      "output_schema": {
+        "$defs": {
+          "Environment": {
+            "description": "Environment summary returned by the adapter.",
+            "properties": {
+              "created_at": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "environment_ref": {
+                "type": "string"
+              },
+              "is_default": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "web_suffix": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "environment_ref",
+              "is_default",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "Page_Environment_": {
+            "properties": {
+              "items": {
+                "items": {
+                  "$ref": "#/$defs/Environment"
+                },
+                "type": "array"
+              },
+              "next_cursor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "items",
+              "truncated"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Page_Environment_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "discovery"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_list_sandboxes",
+      "output_schema": {
+        "$defs": {
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "Page_SandboxSummary_": {
+            "properties": {
+              "items": {
+                "items": {
+                  "$ref": "#/$defs/SandboxSummary"
+                },
+                "type": "array"
+              },
+              "next_cursor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "items",
+              "truncated"
+            ],
+            "type": "object"
+          },
+          "SandboxSummary": {
+            "description": "Sandbox summary returned by the adapter.",
+            "properties": {
+              "app_ref": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "name": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "returncode": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "sandbox_id": {
+                "type": "string"
+              },
+              "sandbox_ref": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "created_at",
+              "sandbox_id",
+              "sandbox_ref",
+              "status",
+              "tags"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Page_SandboxSummary_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "app_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "environment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "include_finished": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "sandboxes"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_list_volumes",
+      "output_schema": {
+        "$defs": {
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "Page_VolumeSummary_": {
+            "properties": {
+              "items": {
+                "items": {
+                  "$ref": "#/$defs/VolumeSummary"
+                },
+                "type": "array"
+              },
+              "next_cursor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "items",
+              "truncated"
+            ],
+            "type": "object"
+          },
+          "VolumeSummary": {
+            "description": "Volume summary returned by the adapter.",
+            "properties": {
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "created_by": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "environment_ref": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "volume_ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "created_at",
+              "environment_ref",
+              "name",
+              "volume_ref"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Page_VolumeSummary_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "environment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "volumes"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_list_workspaces",
+      "output_schema": {
+        "$defs": {
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "Page_Workspace_": {
+            "properties": {
+              "items": {
+                "items": {
+                  "$ref": "#/$defs/Workspace"
+                },
+                "type": "array"
+              },
+              "next_cursor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "items",
+              "truncated"
+            ],
+            "type": "object"
+          },
+          "Workspace": {
+            "description": "Workspace summary returned by the adapter.",
+            "properties": {
+              "current": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "source": {
+                "enum": [
+                  "authenticated_token",
+                  "local_profile"
+                ],
+                "type": "string"
+              },
+              "workspace_ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "current",
+              "name",
+              "source",
+              "workspace_ref"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Page_Workspace_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "discovery"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_ls_volume",
+      "output_schema": {
+        "$defs": {
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "Page_VolumeEntry_": {
+            "properties": {
+              "items": {
+                "items": {
+                  "$ref": "#/$defs/VolumeEntry"
+                },
+                "type": "array"
+              },
+              "next_cursor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "items",
+              "truncated"
+            ],
+            "type": "object"
+          },
+          "VolumeEntry": {
+            "description": "Entry returned from a volume listing.",
+            "properties": {
+              "mtime": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "size_bytes": {
+                "type": "integer"
+              },
+              "type": {
+                "enum": [
+                  "dir",
+                  "fifo",
+                  "file",
+                  "socket",
+                  "symlink",
+                  "unknown"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "mtime",
+              "path",
+              "size_bytes",
+              "type"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Page_VolumeEntry_"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "max_entries": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "path": {
+            "default": "/",
+            "type": "string"
+          },
+          "recursive": {
+            "default": false,
+            "type": "boolean"
+          },
+          "volume_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "volume_ref"
+        ],
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "volumes"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_read_volume_text",
+      "output_schema": {
+        "$defs": {
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "VolumeText": {
+            "description": "Text file payload returned from a volume.",
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "content",
+              "truncated"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/VolumeText"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "max_bytes": {
+            "default": 262144,
+            "maximum": 1048576,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          },
+          "volume_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "volume_ref"
+        ],
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "volumes"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_search_logs",
+      "output_schema": {
+        "$defs": {
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "LogEntry": {
+            "description": "Single log record returned by the adapter.",
+            "properties": {
+              "app_ref": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "container_ref": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "dedup_key": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "function_call_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "function_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              },
+              "sandbox_ref": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "source": {
+                "type": "string"
+              },
+              "ts": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "message",
+              "source"
+            ],
+            "type": "object"
+          },
+          "LogSummary": {
+            "description": "Summary metadata for a log response.",
+            "properties": {
+              "deduped_count": {
+                "type": "integer"
+              },
+              "error_signatures": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "top_sources": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "total_entries": {
+                "type": "integer"
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "deduped_count",
+              "error_signatures",
+              "top_sources",
+              "total_entries",
+              "truncated"
+            ],
+            "type": "object"
+          },
+          "LogsPage": {
+            "description": "Paged log response with summary metadata.",
+            "properties": {
+              "entries": {
+                "items": {
+                  "$ref": "#/$defs/LogEntry"
+                },
+                "type": "array"
+              },
+              "next_cursor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "stream_reset": {
+                "default": false,
+                "type": "boolean"
+              },
+              "summary": {
+                "$ref": "#/$defs/LogSummary"
+              }
+            },
+            "required": [
+              "entries",
+              "summary"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LogsPage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "app_ref": {
+            "type": "string"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 200
+          },
+          "search_text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "app_ref",
+          "search_text"
+        ],
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "logs"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_stat_volume_path",
+      "output_schema": {
+        "$defs": {
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "VolumeEntry": {
+            "description": "Entry returned from a volume listing.",
+            "properties": {
+              "mtime": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "size_bytes": {
+                "type": "integer"
+              },
+              "type": {
+                "enum": [
+                  "dir",
+                  "fifo",
+                  "file",
+                  "socket",
+                  "symlink",
+                  "unknown"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "mtime",
+              "path",
+              "size_bytes",
+              "type"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/VolumeEntry"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "volume_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "volume_ref"
+        ],
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "volumes"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_summarize_failures",
+      "output_schema": {
+        "$defs": {
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "FailureSignature": {
+            "description": "Grouped failure signature for compact diagnostics.",
+            "properties": {
+              "count": {
+                "type": "integer"
+              },
+              "sample_messages": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "signature": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "count",
+              "sample_messages",
+              "signature"
+            ],
+            "type": "object"
+          },
+          "FailureSummary": {
+            "description": "Summary of likely failures from a bounded log page.",
+            "properties": {
+              "signatures": {
+                "items": {
+                  "$ref": "#/$defs/FailureSignature"
+                },
+                "type": "array"
+              },
+              "top_causes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "signatures",
+              "top_causes"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/FailureSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "app_ref": {
+            "type": "string"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 500
+          }
+        },
+        "required": [
+          "app_ref"
+        ],
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "logs"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    },
+    {
+      "annotations": {
+        "destructiveHint": null,
+        "idempotentHint": true,
+        "openWorldHint": null,
+        "readOnlyHint": true
+      },
+      "description": null,
+      "execution": null,
+      "icons": null,
+      "meta": null,
+      "name": "modal_whoami",
+      "output_schema": {
+        "$defs": {
+          "ErrorCode": {
+            "description": "Normalized public error codes exposed by the adapter.",
+            "enum": [
+              "INTERNAL_DRIFT",
+              "NOT_FOUND",
+              "PARSE_ERROR",
+              "POLICY_BLOCKED",
+              "RATE_LIMITED",
+              "SCOPE_VIOLATION",
+              "TIMEOUT",
+              "UNAUTHORIZED",
+              "UPSTREAM_ERROR"
+            ],
+            "type": "string"
+          },
+          "ErrorPayload": {
+            "description": "Structured, safe error payload exposed to MCP clients.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "debug": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "Workspace": {
+            "description": "Workspace summary returned by the adapter.",
+            "properties": {
+              "current": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "source": {
+                "enum": [
+                  "authenticated_token",
+                  "local_profile"
+                ],
+                "type": "string"
+              },
+              "workspace_ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "current",
+              "name",
+              "source",
+              "workspace_ref"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Workspace"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "serializer": null,
+      "tags": [
+        "discovery"
+      ],
+      "task_config": {
+        "mode": "forbidden",
+        "poll_interval": "PT5S"
+      },
+      "timeout": null,
+      "version": null
+    }
+  ]
+}
