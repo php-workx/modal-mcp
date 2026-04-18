@@ -18,6 +18,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI shell."""
     build_parser().parse_args(argv)
+    from modal_mcp.server import run
+
+    run()
     return 0
 
 

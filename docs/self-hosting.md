@@ -22,32 +22,59 @@ explicit disabled-capability errors if invoked internally.
 Unsupported v1 targets and non-goals:
 
 - Cloudflare Workers or edge runtimes.
-- OAuth delegation for Modal tokens.
-- Hosted multi-tenant credential storage.
+- hosted OAuth delegation for Modal tokens.
+- `/session/create` and hosted credential storage (multi-tenant flows).
 - Enabling mutating operations by default.
 - Kubernetes/Helm packaging (deferred to v2/v3 decision gate).
 
 ## 15-Minute Setup
 
-1. Create a Modal service-user token with Viewer permissions scoped to a
-   restricted, non-production environment.
-2. Install dependencies:
+There are two credential paths. Choose the one that matches your setup.
+
+### Path A — existing `~/.modal.toml`
+
+If your machine already has `~/.modal.toml` (created by `modal token set` or
+`modal token new`), the server uses it automatically. No token files are
+needed.
+
+1. Install dependencies:
 
    ```bash
    uv sync --extra dev
    ```
 
-3. Create file-backed secrets:
+2. Generate a signing key and start the server:
+
+   ```bash
+   export MODAL_MCP_SIGNING_KEYS=kid1:$(openssl rand -hex 32)
+   export MODAL_MCP_ALLOWED_ORIGINS=http://127.0.0.1:8765
+   export MODAL_MCP_ALLOWED_HOSTS=127.0.0.1,localhost
+   export MODAL_ENVIRONMENT=dev
+   uv run modal-mcp
+   ```
+
+### Path B — file-backed service-user token
+
+For a clean machine or a dedicated Modal service-user token with Viewer
+permissions scoped to a restricted, non-production environment:
+
+1. Install dependencies:
+
+   ```bash
+   uv sync --extra dev
+   ```
+
+2. Create file-backed secrets with non-empty token values:
 
    ```bash
    mkdir -p .secrets
-   printf '%s' '<modal-token-id>' > .secrets/modal-token-id
+   printf '%s' '<modal-token-id>'     > .secrets/modal-token-id
    printf '%s' '<modal-token-secret>' > .secrets/modal-token-secret
    printf 'kid1:%s' "$(openssl rand -hex 32)" > .secrets/modal-mcp-signing-key
    chmod 600 .secrets/*
    ```
 
-4. Export runtime configuration:
+3. Export runtime configuration:
 
    ```bash
    export MODAL_TOKEN_ID_FILE=$PWD/.secrets/modal-token-id
@@ -58,17 +85,28 @@ Unsupported v1 targets and non-goals:
    export MODAL_ENVIRONMENT=dev
    ```
 
-5. Start the server:
+4. Start the server:
 
    ```bash
    uv run modal-mcp
    ```
 
-6. Configure the MCP client to use Streamable HTTP at:
+### MCP endpoint
 
-   ```text
-   http://127.0.0.1:8765/mcp
-   ```
+Configure the MCP client to use Streamable HTTP at:
+
+```text
+http://127.0.0.1:8765/mcp
+```
+
+### Smoke checks
+
+After the server starts, verify the connection with these read-only tool calls:
+
+- `modal_discovery_server_info` — server metadata and enabled toolsets
+- `modal_whoami` — authenticated Modal user identity
+- `modal_list_environments` — Modal environments visible to the token
+- `modal_list_apps` — apps in the configured environment
 
 ## Required Environment Variables
 
@@ -76,8 +114,10 @@ Unsupported v1 targets and non-goals:
   cross-site, and unlisted origins before MCP handling.
 - `MODAL_MCP_SIGNING_KEYS` or `MODAL_MCP_SIGNING_KEY_FILE`: required. Values use
   `kid:hex` format; the first key signs and all keys verify.
-- Modal credentials from `MODAL_TOKEN_ID` + `MODAL_TOKEN_SECRET`, the `_FILE`
-  variants, or `MODAL_CONFIG_PATH`.
+- Modal credentials from `~/.modal.toml` (via `MODAL_CONFIG_PATH` or the
+  default location), `MODAL_TOKEN_ID` + `MODAL_TOKEN_SECRET`, or the
+  `MODAL_TOKEN_ID_FILE` / `MODAL_TOKEN_SECRET_FILE` variants pointing to
+  non-empty files.
 
 Recommended:
 
@@ -92,8 +132,11 @@ Recommended:
 
 ## Auth And Policy
 
-Self-hosted use can run with Modal credentials only, or with a static MCP bearer
-token by setting `MODAL_MCP_SELF_HOSTED_BEARER_TOKEN_FILE`.
+Self-hosted use can run with Modal credentials only. For non-localhost binds,
+reverse-proxy exposure, or shared-machine scenarios, add a static MCP bearer
+token by setting `MODAL_MCP_SELF_HOSTED_BEARER_TOKEN_FILE` to a path containing
+a non-empty token value. This is optional for pure localhost use where network
+access is already restricted.
 
 Policy middleware runs on every tool call:
 
@@ -143,16 +186,39 @@ uv run ruff format --check .
 uv run mypy src
 ```
 
-Live Modal smoke tests are disabled unless explicitly requested:
+Live Modal smoke tests are disabled unless explicitly requested.
+
+### Opt-In Live Read-Only Verification
+
+`tests/integration/live/test_modal_live.py` is skipped by default. It runs only
+when `MODAL_MCP_LIVE=1` is set. The test performs inventory-style read-only calls
+only — listing environments and apps — and makes no content reads, no log reads,
+no volume file reads, no sandbox stdio reads, and no mutations.
+
+**Do not run it with production credentials.** Use a dedicated, non-production
+Modal workspace with a Viewer-scoped service-user token. The account must have
+at least one environment visible to the token; an empty environment list will
+fail the assertion. An empty app list is accepted.
 
 ```bash
 MODAL_MCP_LIVE=1 \
 MODAL_ENVIRONMENT=dev \
-MODAL_TOKEN_ID=... \
-MODAL_TOKEN_SECRET=... \
-MODAL_MCP_SIGNING_KEYS=kid1:... \
+MODAL_TOKEN_ID=<non-production-token-id> \
+MODAL_TOKEN_SECRET=<non-production-token-secret> \
+MODAL_MCP_SIGNING_KEYS=kid1:<hex-32-bytes> \
 uv run pytest tests/integration/live/test_modal_live.py -q
 ```
 
-The live environment must be non-production and safe for read-only inventory
-calls.
+What the test verifies:
+
+- Modal credentials are accepted (auth validated).
+- `list_environments()` returns at least one environment (the token must have
+  visibility into at least one environment; an empty result fails the test).
+- `list_apps(environment)` completes without error (inventory-style read-only;
+  an empty result is accepted).
+
+What the test explicitly avoids:
+
+- Production credentials or production-dependent assertions.
+- Content reads (log lines, volume file contents, sandbox stdio).
+- Any mutating calls.

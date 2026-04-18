@@ -12,3 +12,6 @@ build/
 coverage.xml
 dist/
 htmlcov/
+
+# AgentOps session artifacts (auto-added)
+.agents/
