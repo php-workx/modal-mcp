@@ -6,9 +6,31 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+SECRET_KEY_PARTS = frozenset(
+    {
+        "access_token",
+        "api_key",
+        "apikey",
+        "auth",
+        "authorization",
+        "password",
+        "secret",
+        "token",
+    }
+)
+SECRET_VALUE_PATTERNS = (
+    re.compile(r"\bbearer\s+\S+", re.IGNORECASE),
+    re.compile(r"\bas-[A-Za-z0-9_-]{8,64}\b"),
+    re.compile(
+        r"\beyJ[A-Za-z0-9_-]{1,128}\.[A-Za-z0-9_-]{1,128}\.[A-Za-z0-9_-]{1,128}\b"
+    ),
+    re.compile(r"\b[A-Za-z0-9_-]{32,}\b"),
+)
 
 
 def build_fixture(
@@ -37,18 +59,30 @@ def write_fixture(path: Path, fixture: dict[str, Any]) -> None:
     """Write one deterministic JSON fixture."""
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(fixture, indent=2, sort_keys=True) + "\n")
+    path.write_text(
+        json.dumps(fixture, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
-def _redact(value: Any) -> Any:
+def _redact(value: Any, *, key: str | None = None) -> Any:
+    lower_key = (key or "").lower()
+    if lower_key and any(part in lower_key for part in SECRET_KEY_PARTS):
+        return "[REDACTED]"
     if isinstance(value, str):
-        if "token" in value.lower() or value.startswith("as-"):
+        lower_value = value.lower()
+        if any(part in lower_value for part in SECRET_KEY_PARTS):
+            return "[REDACTED]"
+        if any(pattern.search(value) for pattern in SECRET_VALUE_PATTERNS):
             return "[REDACTED]"
         return value
     if isinstance(value, dict):
-        return {key: _redact(item) for key, item in sorted(value.items())}
+        return {
+            dict_key: _redact(item, key=dict_key)
+            for dict_key, item in sorted(value.items())
+        }
     if isinstance(value, list):
-        return [_redact(item) for item in value]
+        return [_redact(item, key=key) for item in value]
     return value
 
 

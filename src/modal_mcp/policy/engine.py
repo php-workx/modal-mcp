@@ -111,6 +111,8 @@ class PolicyMiddleware(Middleware):
         actor = self.actor_resolver(context)
         mcp_session_id = resolve_mcp_session_id(context)
         tool_policy = classify_tool(params.name)
+        if tool_policy.mutating:
+            arguments["dry_run"] = policy_args.dry_run
 
         self._enforce_rate_limits(
             actor=actor,
@@ -314,9 +316,14 @@ def redact_tool_result(
     *,
     known_secrets: frozenset[str] = frozenset(),
 ) -> ToolResult:
-    """Redact obvious secret patterns from structured tool output."""
+    """Redact obvious secret patterns from every tool output channel."""
 
     updates: dict[str, Any] = {}
+    if result.content is not None:
+        updates["content"] = [
+            _redact_content_block(block, known_secrets=known_secrets)
+            for block in result.content
+        ]
     if result.structured_content is not None:
         updates["structured_content"] = redact_value(
             result.structured_content,
@@ -327,6 +334,15 @@ def redact_tool_result(
     if not updates:
         return result
     return result.model_copy(update=updates)
+
+
+def _redact_content_block(block: Any, *, known_secrets: frozenset[str]) -> Any:
+    text = getattr(block, "text", None)
+    if not isinstance(text, str):
+        return block
+    return block.model_copy(
+        update={"text": redact_value(text, known_secrets=known_secrets)}
+    )
 
 
 def _append_ref_values(refs: list[str], value: Any) -> None:

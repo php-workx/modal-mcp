@@ -16,13 +16,15 @@ REDACTION_PLACEHOLDER = "[REDACTED]"
 BASE64_REDACTION_PLACEHOLDER = "[REDACTED_BASE64]"
 MIN_SECRET_LENGTH = 4
 SHAPE_PATTERNS = (
-    re.compile(r"MODAL_TOKEN_[A-Z_]*=[^\s,}\]]+"),
-    re.compile(r"\bas-[A-Za-z0-9_-]{8,}\b"),
+    re.compile(r"MODAL_TOKEN_[A-Z_]*=[^\s,}\]]{1,256}"),
+    re.compile(r"\bas-[A-Za-z0-9_-]{8,64}\b"),
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-    re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"),
+    re.compile(
+        r"\beyJ[A-Za-z0-9_-]{1,128}\.[A-Za-z0-9_-]{1,128}\.[A-Za-z0-9_-]{1,128}\b"
+    ),
 )
 BASE64_LIKE_PATTERN = re.compile(
-    r"(?<![A-Za-z0-9+/=_-])([A-Za-z0-9+/=_-]{24,})(?![A-Za-z0-9+/=_-])"
+    r"(?<![A-Za-z0-9+/=_-])([A-Za-z0-9+/=_-]{24,256})(?![A-Za-z0-9+/=_-])"
 )
 
 
@@ -73,9 +75,9 @@ def redact_string(
     """Redact one string by exact secret values, shape regexes, and base64 scans."""
 
     redacted = value
-    for secret in sorted(known_secrets, key=len, reverse=True):
-        if len(secret) >= MIN_SECRET_LENGTH:
-            redacted = redacted.replace(secret, REDACTION_PLACEHOLDER)
+    secrets = (secret for secret in known_secrets if len(secret) >= MIN_SECRET_LENGTH)
+    for secret in sorted(secrets, key=len, reverse=True):
+        redacted = redacted.replace(secret, REDACTION_PLACEHOLDER)
     for pattern in SHAPE_PATTERNS:
         redacted = pattern.sub(REDACTION_PLACEHOLDER, redacted)
     return BASE64_LIKE_PATTERN.sub(

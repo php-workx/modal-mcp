@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 import time
 from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, datetime
@@ -31,6 +32,7 @@ class JSONLAuditSink:
         self.target = target
         self.known_secrets = frozenset(known_secrets)
         self._now = now or time.time
+        self._write_lock = threading.Lock()
 
     def record_decision(self, context: Any, decision: Any) -> None:
         """Record a policy decision for a tool call."""
@@ -142,7 +144,7 @@ class JSONLAuditSink:
             return
         path = Path(self.target).expanduser()
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as file:
+        with self._write_lock, path.open("a", encoding="utf-8") as file:
             file.write(line)
             file.flush()
             os.fsync(file.fileno())

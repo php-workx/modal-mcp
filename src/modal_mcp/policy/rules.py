@@ -71,11 +71,21 @@ def evaluate(
     normalized_toolset = toolset.strip().lower()
     enabled = frozenset(enabled_toolsets)
 
-    if not normalized_tool or normalized_toolset not in KNOWN_TOOLSETS:
+    if not normalized_tool:
         return _decision(
             allowed=False,
             code=PolicyCode.UNKNOWN_TOOL,
-            reason="unknown tool or toolset",
+            reason="tool name is required",
+            tool_name=normalized_tool,
+            toolset=normalized_toolset,
+            metadata=metadata,
+        )
+
+    if normalized_toolset not in KNOWN_TOOLSETS:
+        return _decision(
+            allowed=False,
+            code=PolicyCode.UNKNOWN_TOOL,
+            reason="unknown toolset",
             tool_name=normalized_tool,
             toolset=normalized_toolset,
             metadata=metadata,

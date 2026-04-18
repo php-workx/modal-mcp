@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 import inspect
-import sys
 from pathlib import Path
 
 import pytest
-from pydantic import SecretStr
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-
 from fastmcp.server.auth import MultiAuth, RemoteAuthProvider
 from fastmcp.server.auth.providers.jwt import JWTVerifier
+from pydantic import SecretStr
 
 from modal_mcp.auth import STATIC_BEARER_SCOPE, StaticTokenVerifier, build_auth
 from modal_mcp.config import Settings
@@ -26,6 +22,33 @@ def base_settings_kwargs(modal_config_path: Path) -> dict[str, object]:
         "modal_mcp_allowed_origins": ("http://127.0.0.1:8765",),
         "modal_mcp_signing_keys": SecretStr("kid1:" + "a" * 64),
     }
+
+
+CONFIG_ENV_KEYS = {
+    "MODAL_TOKEN_ID",
+    "MODAL_TOKEN_SECRET",
+    "MODAL_TOKEN_ID_FILE",
+    "MODAL_TOKEN_SECRET_FILE",
+    "MODAL_CONFIG_PATH",
+    "MODAL_MCP_ALLOWED_ORIGINS",
+    "MODAL_MCP_SIGNING_KEYS",
+    "MODAL_MCP_SIGNING_KEY_FILE",
+    "MODAL_MCP_AUTH_MODE",
+    "MODAL_MCP_PUBLIC_ORIGIN",
+    "MODAL_MCP_AUTH_ISSUER",
+    "MODAL_MCP_AUTH_JWKS_URI",
+    "MODAL_MCP_AUTH_AUDIENCE",
+    "MODAL_MCP_ALLOWED_REDIRECT_URIS",
+    "MODAL_MCP_SELF_HOSTED_BEARER_TOKEN_FILE",
+}
+
+
+@pytest.fixture(autouse=True)
+def clean_auth_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep auth tests independent from ambient operator settings."""
+
+    for key in CONFIG_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
 
 
 @pytest.fixture

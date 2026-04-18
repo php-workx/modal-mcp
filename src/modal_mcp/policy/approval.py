@@ -101,6 +101,7 @@ class ApprovalTokenLedger:
         token_digest = token_sha256(token)
         async with self._lock:
             self._reject_expired(payload)
+            _assert_actor_matches(payload, actor)
             self._reject_duplicate(token_digest)
             record = _record_from_payload(
                 token_digest=token_digest,

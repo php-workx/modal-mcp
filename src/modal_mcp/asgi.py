@@ -156,12 +156,6 @@ class OriginGuard:
 
         origin = _get_header(scope, b"origin")
         host = _get_header(scope, b"host")
-        if host is None:
-            server = scope.get("server")
-            if isinstance(server, tuple) and server:
-                server_host = server[0]
-                if isinstance(server_host, str):
-                    host = server_host
 
         try:
             validate_origin(origin, host, self._settings)

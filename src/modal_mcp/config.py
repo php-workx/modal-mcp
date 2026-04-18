@@ -70,10 +70,7 @@ def load_secret_file(path: str | Path) -> SecretStr:
         msg = f"unable to read secret file: {secret_path}"
         raise ConfigError(msg) from exc
 
-    if value.endswith("\n"):
-        value = value[:-1]
-    if value.endswith("\r"):
-        value = value[:-1]
+    value = value.rstrip("\r\n")
     if not value:
         msg = f"secret file is empty: {secret_path}"
         raise ConfigError(msg)
@@ -482,10 +479,9 @@ def _assert_hosted_runtime_supported(settings: Settings) -> None:
         raise ConfigError(msg)
 
 
-def scrub_secret_env(settings: Settings) -> frozenset[str]:
+def scrub_secret_env() -> frozenset[str]:
     """Remove env vars that carry Modal credentials or signing material."""
 
-    del settings
     removed: set[str] = set()
     for key in SECRET_ENV_KEYS:
         if key in os.environ:

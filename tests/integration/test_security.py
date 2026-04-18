@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 from pydantic import SecretStr, ValidationError
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import modal_mcp.config as config
 from modal_mcp.asgi import OriginGuard, OriginValidationError, validate_origin
@@ -62,7 +59,7 @@ def security_settings(tmp_path: Path) -> Settings:
     )
 
 
-def hosted_settings(tmp_path: Path) -> Settings:
+def make_hosted_settings(tmp_path: Path) -> Settings:
     """Return hosted settings that should currently fail at startup."""
 
     modal_config = tmp_path / "modal.toml"
@@ -127,7 +124,7 @@ def test_runtime_security_refuses_hosted_mode_until_session_resolution_exists(
 ) -> None:
     """Hosted mode must fail closed before request-scoped session support lands."""
 
-    settings = hosted_settings(tmp_path)
+    settings = make_hosted_settings(tmp_path)
 
     with pytest.raises(ConfigError, match=r"CONFIG_CONFLICT|hosted mode"):
         assert_runtime_security(settings)
@@ -138,7 +135,7 @@ def test_create_asgi_app_refuses_hosted_mode_before_tool_serving(
 ) -> None:
     """The ASGI entrypoint must not serve hosted mode through the global adapter."""
 
-    settings = hosted_settings(tmp_path)
+    settings = make_hosted_settings(tmp_path)
 
     async def adapter_factory(_: Settings) -> object:
         return object()
@@ -151,7 +148,7 @@ def _expert_settings(tmp_path: Path) -> Settings:
     """Return settings that request expert toolset enablement."""
 
     modal_config = tmp_path / "modal.toml"
-    modal_config.write_text("[default]\\n", encoding="utf-8")
+    modal_config.write_text("[default]\n", encoding="utf-8")
     return Settings(
         modal_config_path=modal_config,
         modal_mcp_allowed_origins=("http://127.0.0.1:8765",),
@@ -368,6 +365,28 @@ async def test_origin_guard_rejects_before_downstream_app(
     assert called is False
     assert messages[0]["status"] == 403
     assert messages[1]["body"] == b"Forbidden"
+
+
+@pytest.mark.asyncio
+async def test_origin_guard_rejects_missing_host_header(
+    security_settings: Settings,
+) -> None:
+    """Missing Host must fail closed instead of using the ASGI server bind."""
+
+    called = False
+
+    async def downstream(scope: dict[str, Any], receive: Any, send: Any) -> None:
+        del scope, receive, send
+        nonlocal called
+        called = True
+
+    guard = OriginGuard(downstream, security_settings)
+    scope = _http_scope("http://127.0.0.1:8765", None)
+    scope["server"] = ("127.0.0.1", 8765)
+    messages = await _invoke(guard, scope)
+
+    assert called is False
+    assert messages[0]["status"] == 403
 
 
 @pytest.mark.asyncio

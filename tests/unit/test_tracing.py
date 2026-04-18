@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
-import sys
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
 import pytest
+from fastmcp.server.middleware import MiddlewareContext
 from mcp import types as mt
 from pydantic import SecretStr
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-
-from fastmcp.server.middleware import MiddlewareContext
 
 from modal_mcp.config import Settings
 from modal_mcp.domain.errors import ErrorCode, ModalAdapterError
@@ -152,7 +148,10 @@ class _FakeFastMCPContext:
 
 
 def _instrument_name(instrument: Any) -> str:
-    return str(getattr(instrument, "name", instrument._name))
+    name = getattr(instrument, "name", None)
+    if name is None:
+        name = instrument._name
+    return str(name)
 
 
 class _FakeCounter:

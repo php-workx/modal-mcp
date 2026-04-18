@@ -3,19 +3,15 @@
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
+from fastmcp.server.middleware import MiddlewareContext
+from fastmcp.tools.base import ToolResult
 from mcp import types as mt
 from pydantic import SecretStr
 from starlette.requests import Request
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-
-from fastmcp.server.middleware import MiddlewareContext
-from fastmcp.tools.base import ToolResult
 
 from modal_mcp.config import Settings
 from modal_mcp.domain.errors import ErrorCode, ModalAdapterError
@@ -296,6 +292,20 @@ async def test_pending_approval_is_not_usable_until_committed(
 
 
 @pytest.mark.asyncio
+async def test_begin_approval_rejects_actor_payload_mismatch(tmp_path: Path) -> None:
+    """The ledger enforces actor consistency even for direct callers."""
+
+    payload = _approval_payload(actor="alice", auth_session_id="auth-1")
+    token = encode_approval(payload, signing_keys=(("kid1", _SIGNING_KEY_BYTES),))
+    ledger = ApprovalTokenLedger(tmp_path / "approvals.jsonl", now=lambda: 1_005)
+
+    with pytest.raises(ModalAdapterError, match="actor mismatch"):
+        await ledger.begin_approval(token, payload, ApprovalActor("bob", "auth-1"))
+
+    assert ledger.is_pending(token) is False
+
+
+@pytest.mark.asyncio
 async def test_commit_approval_is_the_only_usable_transition(tmp_path: Path) -> None:
     """Only a committed approval can be consumed by the policy middleware."""
 
@@ -489,15 +499,55 @@ async def test_policy_middleware_consumes_approval_strips_token_and_redacts(
     ) -> ToolResult:
         assert "approval_token" not in (next_context.message.arguments or {})
         return ToolResult(
+            content=[
+                mt.TextContent(
+                    type="text",
+                    text="plain MODAL_TOKEN_SECRET=super-secret",
+                )
+            ],
             structured_content={
                 "message": "failed with MODAL_TOKEN_SECRET=super-secret"
-            }
+            },
         )
 
     result = await middleware.on_call_tool(context, call_next)
 
     assert ledger.is_consumed(token) is True
+    assert result.content[0].text == "plain [REDACTED]"
     assert result.structured_content == {"message": "failed with [REDACTED]"}
+
+
+@pytest.mark.asyncio
+async def test_policy_middleware_forwards_normalized_dry_run(
+    policy_settings: Settings,
+) -> None:
+    """Mutating calls without dry_run are forwarded as explicit dry runs."""
+
+    actor = ApprovalActor("alice", "auth-1")
+    middleware = PolicyMiddleware(
+        policy_settings,
+        approval_ledger=ApprovalTokenLedger(now=lambda: 1_006),
+        actor_resolver=lambda _: actor,
+        now=lambda: 1_006,
+    )
+    context = MiddlewareContext(
+        message=mt.CallToolRequestParams(
+            name="modal_stop_app",
+            arguments={"app_ref": "mref1.app"},
+        ),
+        fastmcp_context=_FakeFastMCPContext("mcp-1"),  # type: ignore[arg-type]
+        method="tools/call",
+    )
+
+    async def call_next(
+        next_context: MiddlewareContext[mt.CallToolRequestParams],
+    ) -> ToolResult:
+        assert (next_context.message.arguments or {})["dry_run"] is True
+        return ToolResult(structured_content={"ok": True})
+
+    result = await middleware.on_call_tool(context, call_next)
+
+    assert result.structured_content == {"ok": True}
 
 
 @pytest.mark.asyncio

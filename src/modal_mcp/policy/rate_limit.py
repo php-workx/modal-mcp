@@ -25,15 +25,13 @@ def rate_limit_key(
 ) -> str:
     """Build the rate-limit key without trusting Mcp-Session-Id alone."""
 
-    del mcp_session_id
+    del mcp_session_id, method
     if auth_session_id:
         return f"auth_session:{auth_session_id}"
     if actor_principal:
         return f"actor:{actor_principal}"
     if remote_address:
         return f"remote:{remote_address}"
-    if method == "initialize":
-        return GLOBAL_RATE_LIMIT_KEY
     return GLOBAL_RATE_LIMIT_KEY
 
 

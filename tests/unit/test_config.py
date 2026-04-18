@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import os
-import sys
 from pathlib import Path
 
 import pytest
 from pydantic import SecretStr, ValidationError
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from modal_mcp.config import (
     SECRET_ENV_KEYS,
@@ -337,9 +334,9 @@ def test_scrub_secret_env_removes_secret_carriers(
 
     for key in SECRET_ENV_KEYS:
         monkeypatch.setenv(key, "secret")
-    settings = Settings(**base_settings_kwargs(modal_config_path))
+    Settings(**base_settings_kwargs(modal_config_path))
 
-    removed = scrub_secret_env(settings)
+    removed = scrub_secret_env()
 
     assert removed >= SECRET_ENV_KEYS
     assert all(key not in os.environ for key in SECRET_ENV_KEYS)

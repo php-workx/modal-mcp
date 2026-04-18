@@ -6,16 +6,12 @@ import asyncio
 import dataclasses
 import inspect
 import os
-import sys
 from collections.abc import AsyncIterable
 from datetime import UTC, datetime
-from pathlib import Path
 
 import pytest
 from google.protobuf.empty_pb2 import Empty
 from google.protobuf.timestamp_pb2 import Timestamp
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 try:
     import modal
@@ -23,6 +19,8 @@ try:
     from modal import sandbox as modal_sandbox
     from modal import volume as modal_volume
 except ModuleNotFoundError:  # pragma: no cover - dependency drift guard
+    if os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"):
+        raise
     pytest.skip("modal package is unavailable", allow_module_level=True)
 
 from modal_mcp.adapters.capabilities import CAPABILITY_REGISTRY, RPC_INVENTORY
@@ -30,6 +28,8 @@ from modal_mcp.adapters.capabilities import CAPABILITY_REGISTRY, RPC_INVENTORY
 try:
     from modal_proto import api_pb2
 except ModuleNotFoundError:  # pragma: no cover - dependency drift guard
+    if os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"):
+        raise
     pytest.skip("modal_proto package is unavailable", allow_module_level=True)
 
 

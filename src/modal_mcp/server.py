@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import replace
@@ -42,6 +43,8 @@ from modal_mcp.policy.approval import (
 from modal_mcp.policy.engine import PolicyMiddleware
 from modal_mcp.policy.rate_limit import TokenBucketRateLimiter, rate_limit_key
 from modal_mcp.toolsets import register_toolsets
+
+logger = logging.getLogger(__name__)
 
 ALL_TOOLSETS = frozenset(
     {
@@ -293,8 +296,10 @@ def _approval_route(
                 replace(pending, status=RECORD_APPROVED),
             )
         except Exception as exc:  # pragma: no cover - defensive response wrapper
-            with suppress(Exception):
+            try:
                 await _mark_approval_audit_failure(ledger, pending)
+            except Exception:
+                logger.exception("failed to mark approval unusable after audit failure")
             return _approval_error_response(
                 ModalAdapterError(
                     ErrorCode.INTERNAL_DRIFT,
@@ -361,11 +366,13 @@ def create_mcp(
     adapter_factory: AdapterFactory = _default_adapter_factory,
     approval_ledger: ApprovalTokenLedger | None = None,
     audit_sink: Any | None = None,
+    _skip_security_check: bool = False,
 ) -> FastMCP[Any]:
     """Create the FastMCP server with auth, lifespan, and toolset gating."""
 
     resolved_settings = settings or _settings_from_env()
-    assert_runtime_security(resolved_settings)
+    if not _skip_security_check:
+        assert_runtime_security(resolved_settings)
     configure_logging(resolved_settings)
     resolved_audit_sink = audit_sink or audit_sink_from_settings(resolved_settings)
 
@@ -411,7 +418,7 @@ def create_asgi_app(
 
     resolved_settings = settings or _settings_from_env()
     assert_runtime_security(resolved_settings)
-    scrub_secret_env(resolved_settings)
+    scrub_secret_env()
     approval_ledger = _approval_ledger_from_settings(resolved_settings)
     audit_sink = audit_sink_from_settings(resolved_settings)
     approval_rate_limiter = _approval_rate_limiter_from_settings(resolved_settings)
@@ -420,6 +427,7 @@ def create_asgi_app(
         adapter_factory=adapter_factory,
         approval_ledger=approval_ledger,
         audit_sink=audit_sink,
+        _skip_security_check=True,
     )
     middleware = [Middleware(OriginGuard, settings=resolved_settings)]
     mcp_app = mcp.http_app(path="/mcp", middleware=middleware)

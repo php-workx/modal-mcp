@@ -61,24 +61,27 @@ class OtelMiddleware(Middleware):
         attributes = {"mcp.method.name": method_name}
         if tool_name is not None:
             attributes["tool"] = tool_name
+        is_tool_call = method_name == "tools/call"
         with self._span_factory(context, method_name, self.settings):
             try:
                 result = await call_next(context)
             except ModalAdapterError as exc:
-                if exc.code is ErrorCode.POLICY_BLOCKED:
+                if is_tool_call and exc.code is ErrorCode.POLICY_BLOCKED:
                     self.instruments.tool_denials.add(
                         1,
                         {**attributes, "rule": exc.code.value},
                     )
+                if is_tool_call:
+                    self.instruments.tool_invocations.add(
+                        1,
+                        {**attributes, "result": "error"},
+                    )
+                raise
+            if is_tool_call:
                 self.instruments.tool_invocations.add(
                     1,
-                    {**attributes, "result": "error"},
+                    {**attributes, "result": "ok"},
                 )
-                raise
-            self.instruments.tool_invocations.add(
-                1,
-                {**attributes, "result": "ok"},
-            )
             return result
 
 

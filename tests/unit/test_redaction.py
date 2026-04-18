@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import base64
-import sys
 from pathlib import Path
 
 import pytest
 import structlog
 from pydantic import SecretStr
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from modal_mcp.config import Settings
 from modal_mcp.observability.logger import configure_logging
@@ -77,15 +74,19 @@ def test_redact_value_replaces_base64_payloads_that_decode_to_secrets() -> None:
 def test_structlog_configuration_orders_redactor_after_exception_formatting() -> None:
     """The redactor sits after format_exc_info and before JSONRenderer."""
 
-    configure_logging(known_secrets=("secret-value",))
-    processors = list(structlog.get_config()["processors"])
+    previous_config = structlog.get_config()
+    try:
+        configure_logging(known_secrets=("secret-value",))
+        processors = list(structlog.get_config()["processors"])
 
-    format_index = processors.index(structlog.processors.format_exc_info)
-    redact_index = processors.index(structlog_redact_processor)
-    json_index = next(
-        index
-        for index, processor in enumerate(processors)
-        if isinstance(processor, structlog.processors.JSONRenderer)
-    )
+        format_index = processors.index(structlog.processors.format_exc_info)
+        redact_index = processors.index(structlog_redact_processor)
+        json_index = next(
+            index
+            for index, processor in enumerate(processors)
+            if isinstance(processor, structlog.processors.JSONRenderer)
+        )
 
-    assert format_index < redact_index < json_index
+        assert format_index < redact_index < json_index
+    finally:
+        structlog.configure(**previous_config)
