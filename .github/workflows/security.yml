@@ -76,7 +76,7 @@ jobs:
         with:
           sarif_file: semgrep.sarif
 
-  betterleaks:
+  trufflehog:
     name: Secret Scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -88,11 +88,9 @@ jobs:
           fetch-depth: 0
 
       - name: Scan repository for secrets
-        uses: dortort/betterleaks-action@v1
+        uses: trufflesecurity/trufflehog@47e7b7cd74f578e1e3145d48f669f22fd1330ca6 # v3.94.3
         with:
-          scan-mode: git
-          report-format: sarif
-          fail-on-leak: true
+          extra_args: --results=verified,unknown
 
   codeql:
     name: CodeQL
