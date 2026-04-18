@@ -292,7 +292,17 @@ class ModalSdkAdapter:
             expected_env=self._environment_name(environment_name),
         )
         for app in self.list_apps(environment_name):
-            if app.app_ref == app_id or app.name == app_id or native_id in app.app_ref:
+            if app.app_ref == app_id or app.name == app_id:
+                return app
+            try:
+                app_native_id = decode_ref(
+                    app.app_ref,
+                    expected_env=self._environment_name(environment_name),
+                    signing_keys=self._signing_keys,
+                ).id
+            except ValueError:
+                continue
+            if app_native_id == native_id:
                 return app
         return None
 
@@ -316,7 +326,7 @@ class ModalSdkAdapter:
 
     def get_app_logs(
         self,
-        app_id: str,
+        app_id: str | None,
         *,
         since: datetime | None = None,
         until: datetime | None = None,
@@ -330,7 +340,7 @@ class ModalSdkAdapter:
     ) -> LogsPage:
         """Return a bounded log page for an app."""
 
-        native_id = self._native_id(app_id)
+        native_id = self._native_id(app_id) if app_id else None
         request = self._request(
             "AppFetchLogsRequest",
             app_id=native_id,
@@ -420,7 +430,7 @@ class ModalSdkAdapter:
         """Return logs for one container."""
 
         return self.get_app_logs(
-            "",
+            None,
             since=since,
             until=until,
             limit=limit,
@@ -474,6 +484,7 @@ class ModalSdkAdapter:
         path: str,
         *,
         encoding: str = "utf-8",
+        max_bytes: int | None = None,
     ) -> str:
         """Return a text file from a volume."""
 
@@ -489,8 +500,13 @@ class ModalSdkAdapter:
             raw.get("data") if isinstance(raw, Mapping) else raw,
         )
         if isinstance(data, bytes):
+            if max_bytes is not None:
+                data = data[: max_bytes + 1]
             return data.decode(encoding)
-        return str(data)
+        text = str(data)
+        if max_bytes is None:
+            return text
+        return text.encode(encoding)[: max_bytes + 1].decode(encoding, errors="replace")
 
     def stat_volume_path(self, volume_id: str, path: str) -> VolumeEntry | None:
         """Return metadata for a single volume path."""

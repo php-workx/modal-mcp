@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,49 +168,51 @@ class CapabilitySpec:
     read_only: bool = True
 
 
-CAPABILITY_REGISTRY: dict[str, CapabilitySpec] = {
-    "discovery": CapabilitySpec(
-        name="discovery",
-        method_names=(
-            "validate_auth",
-            "whoami",
-            "list_workspaces",
-            "list_environments",
-            "get_environment",
+CAPABILITY_REGISTRY = MappingProxyType(
+    {
+        "discovery": CapabilitySpec(
+            name="discovery",
+            method_names=(
+                "validate_auth",
+                "whoami",
+                "list_workspaces",
+                "list_environments",
+                "get_environment",
+            ),
+            rpc_method_names=("WorkspaceNameLookup",),
         ),
-        rpc_method_names=("WorkspaceNameLookup",),
-    ),
-    "apps": CapabilitySpec(
-        name="apps",
-        method_names=("list_apps", "get_app", "list_app_deployments"),
-        rpc_method_names=("AppList", "AppDeploymentHistory", "AppRollback", "AppStop"),
-    ),
-    "containers": CapabilitySpec(
-        name="containers",
-        method_names=("list_containers", "get_container", "get_container_logs"),
-        rpc_method_names=("TaskList", "TaskGetInfo", "ContainerStop"),
-    ),
-    "logs": CapabilitySpec(
-        name="logs",
-        method_names=("get_app_logs", "tail_app_logs"),
-        rpc_method_names=("AppFetchLogs", "AppGetLogs"),
-    ),
-    "volumes": CapabilitySpec(
-        name="volumes",
-        method_names=(
-            "list_volumes",
-            "ls_volume",
-            "read_volume_text",
-            "stat_volume_path",
+        "apps": CapabilitySpec(
+            name="apps",
+            method_names=("list_apps", "get_app", "list_app_deployments"),
+            rpc_method_names=("AppList", "AppDeploymentHistory"),
         ),
-        rpc_method_names=("VolumeList", "VolumeListFiles2", "VolumeGetFile2"),
-    ),
-    "sandboxes": CapabilitySpec(
-        name="sandboxes",
-        method_names=("list_sandboxes", "get_sandbox", "get_sandbox_stdio"),
-        rpc_method_names=("SandboxList", "Sandbox.from_id"),
-    ),
-}
+        "containers": CapabilitySpec(
+            name="containers",
+            method_names=("list_containers", "get_container", "get_container_logs"),
+            rpc_method_names=("TaskList", "TaskGetInfo"),
+        ),
+        "logs": CapabilitySpec(
+            name="logs",
+            method_names=("get_app_logs", "tail_app_logs"),
+            rpc_method_names=("AppFetchLogs", "AppGetLogs"),
+        ),
+        "volumes": CapabilitySpec(
+            name="volumes",
+            method_names=(
+                "list_volumes",
+                "ls_volume",
+                "read_volume_text",
+                "stat_volume_path",
+            ),
+            rpc_method_names=("VolumeList", "VolumeListFiles2", "VolumeGetFile2"),
+        ),
+        "sandboxes": CapabilitySpec(
+            name="sandboxes",
+            method_names=("list_sandboxes", "get_sandbox", "get_sandbox_stdio"),
+            rpc_method_names=("SandboxList", "Sandbox.from_id"),
+        ),
+    }
+)
 
 
 __all__ = [

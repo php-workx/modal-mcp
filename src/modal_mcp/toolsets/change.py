@@ -84,7 +84,8 @@ def _disabled_mutation(
 ) -> ToolEnvelope[Any]:
     del approval_token
     details = {
-        "mode": "plan" if dry_run else "executed",
+        "mode": "plan" if dry_run else "disabled",
+        "requested_mode": "plan" if dry_run else "execute",
         "plan": {
             "requires_approval": True,
             "approval_token": None,

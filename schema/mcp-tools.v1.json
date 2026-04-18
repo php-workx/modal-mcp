@@ -12,7 +12,7 @@
         "openWorldHint": null,
         "readOnlyHint": true
       },
-      "description": null,
+      "description": "Compare deployment presence; detailed diff fields are v1 placeholders.",
       "execution": null,
       "icons": null,
       "meta": null,
@@ -1002,15 +1002,6 @@
         "additionalProperties": false,
         "properties": {
           "app_ref": {
-            "type": "string"
-          },
-          "format": {
-            "default": "summary",
-            "enum": [
-              "both",
-              "raw",
-              "summary"
-            ],
             "type": "string"
           },
           "function_call_id": {
@@ -3827,17 +3818,6 @@
       "parameters": {
         "additionalProperties": false,
         "properties": {
-          "created_before": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
           "environment_name": {
             "anyOf": [
               {
@@ -4739,15 +4719,6 @@
         "additionalProperties": false,
         "properties": {
           "app_ref": {
-            "type": "string"
-          },
-          "format": {
-            "default": "summary",
-            "enum": [
-              "both",
-              "raw",
-              "summary"
-            ],
             "type": "string"
           },
           "limit": {

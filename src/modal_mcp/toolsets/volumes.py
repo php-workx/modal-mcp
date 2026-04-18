@@ -35,9 +35,7 @@ def register_volume_tools(mcp: FastMCP[Any]) -> None:
     )
     def modal_list_volumes(
         environment_name: str | None = None,
-        created_before: str | None = None,
     ) -> ToolEnvelope[Page[VolumeSummary]]:
-        del created_before
         return page_envelope(get_modal_adapter().list_volumes(environment_name))
 
     @mcp.tool(
@@ -70,11 +68,14 @@ def register_volume_tools(mcp: FastMCP[Any]) -> None:
         path: str,
         max_bytes: Annotated[int, Field(ge=1, le=1_048_576)] = 262_144,
     ) -> ToolEnvelope[VolumeText]:
-        content = get_modal_adapter().read_volume_text(volume_ref, path)
-        encoded = content.encode("utf-8")
+        raw_content = get_modal_adapter().read_volume_text(
+            volume_ref,
+            path,
+            max_bytes=max_bytes,
+        )
+        encoded = raw_content.encode("utf-8")
         truncated = len(encoded) > max_bytes
-        if truncated:
-            content = encoded[:max_bytes].decode("utf-8", errors="replace")
+        content = encoded[:max_bytes].decode("utf-8", errors="replace")
         return envelope(VolumeText(content=content, truncated=truncated))
 
     @mcp.tool(

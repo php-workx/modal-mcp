@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Literal
 
 from fastmcp import FastMCP
@@ -44,8 +45,8 @@ def register_discovery_tools(mcp: FastMCP[Any], settings: Settings) -> None:
             ServerInfo(
                 mode=settings.modal_mcp_auth_mode,
                 read_only=settings.modal_mcp_read_only,
-                toolsets=tuple(settings.modal_mcp_enabled_toolsets),
-                version="0.1.0",
+                toolsets=tuple(sorted(settings.modal_mcp_enabled_toolsets)),
+                version=_package_version(),
             )
         )
 
@@ -83,6 +84,13 @@ def register_discovery_tools(mcp: FastMCP[Any], settings: Settings) -> None:
         if environment is None:
             return not_found(f"environment not found: {environment_name}")
         return envelope(environment)
+
+
+def _package_version() -> str:
+    try:
+        return version("modal-mcp")
+    except PackageNotFoundError:
+        return "0.1.0"
 
 
 __all__ = ["ServerInfo", "register_discovery_tools"]

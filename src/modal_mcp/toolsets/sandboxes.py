@@ -68,11 +68,15 @@ def register_sandbox_tools(mcp: FastMCP[Any]) -> None:
         tail_bytes: Annotated[int, Field(ge=1, le=65_536)] = 8_192,
     ) -> ToolEnvelope[SandboxStdio]:
         stdout, stderr = get_modal_adapter().get_sandbox_stdio(sandbox_ref)
-        combined_size = len(stdout.encode("utf-8")) + len(stderr.encode("utf-8"))
-        truncated = combined_size > tail_bytes
-        if truncated:
-            stdout = stdout[:tail_bytes]
-            stderr = stderr[:tail_bytes]
+        stdout_bytes = stdout.encode("utf-8")
+        stderr_bytes = stderr.encode("utf-8")
+        stdout_truncated = len(stdout_bytes) > tail_bytes
+        stderr_truncated = len(stderr_bytes) > tail_bytes
+        if stdout_truncated:
+            stdout = stdout_bytes[-tail_bytes:].decode("utf-8", errors="replace")
+        if stderr_truncated:
+            stderr = stderr_bytes[-tail_bytes:].decode("utf-8", errors="replace")
+        truncated = stdout_truncated or stderr_truncated
         return envelope(SandboxStdio(stdout=stdout, stderr=stderr, truncated=truncated))
 
 

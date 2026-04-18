@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any
 
 from fastmcp import FastMCP
 from pydantic import BaseModel
@@ -12,8 +12,6 @@ from modal_mcp.adapters.registry import get_modal_adapter
 from modal_mcp.domain.envelope import ToolEnvelope
 from modal_mcp.domain.models import LogsPage
 from modal_mcp.toolsets._common import READ_ONLY_ANNOTATIONS, envelope
-
-OutputFormat = Literal["summary", "raw", "both"]
 
 
 class FailureSignature(BaseModel):
@@ -63,9 +61,7 @@ def register_log_tools(mcp: FastMCP[Any]) -> None:
         task_id: str | None = None,
         sandbox_id: str | None = None,
         search_text: str | None = None,
-        format: OutputFormat = "summary",
     ) -> ToolEnvelope[LogsPage]:
-        del format
         return envelope(
             get_modal_adapter().get_app_logs(
                 app_ref,
@@ -90,9 +86,7 @@ def register_log_tools(mcp: FastMCP[Any]) -> None:
         app_ref: str,
         search_text: str,
         limit: int | None = 200,
-        format: OutputFormat = "summary",
     ) -> ToolEnvelope[LogsPage]:
-        del format
         return envelope(
             get_modal_adapter().get_app_logs(
                 app_ref,
@@ -111,17 +105,20 @@ def register_log_tools(mcp: FastMCP[Any]) -> None:
         limit: int | None = 500,
     ) -> ToolEnvelope[FailureSummary]:
         page = get_modal_adapter().get_app_logs(app_ref, limit=limit)
+        signature_matches: dict[str, list[str]] = {
+            signature: [] for signature in page.summary.error_signatures
+        }
+        for entry in page.entries:
+            for signature, messages in signature_matches.items():
+                if signature in entry.message:
+                    messages.append(entry.message)
         signatures = [
             FailureSignature(
                 signature=signature,
-                count=sum(1 for entry in page.entries if signature in entry.message),
-                sample_messages=[
-                    entry.message
-                    for entry in page.entries
-                    if signature in entry.message
-                ][:3],
+                count=len(messages),
+                sample_messages=messages[:3],
             )
-            for signature in page.summary.error_signatures
+            for signature, messages in signature_matches.items()
         ]
         return envelope(
             FailureSummary(
@@ -140,6 +137,8 @@ def register_log_tools(mcp: FastMCP[Any]) -> None:
         base_version: int,
         candidate_version: int,
     ) -> ToolEnvelope[DeploymentComparison]:
+        """Compare deployment presence; detailed diff fields are v1 placeholders."""
+
         deployments = get_modal_adapter().list_app_deployments(app_ref)
         versions = {deployment.version: deployment for deployment in deployments}
         return envelope(

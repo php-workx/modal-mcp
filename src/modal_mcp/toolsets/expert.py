@@ -41,7 +41,8 @@ def register_expert_tools(mcp: FastMCP[Any]) -> None:
         return disabled_error(
             "modal_expert_execute",
             {
-                "mode": "plan" if dry_run else "executed",
+                "mode": "plan" if dry_run else "disabled",
+                "requested_mode": "plan" if dry_run else "execute",
                 "plan": {
                     "requires_approval": True,
                     "approval_token": None,

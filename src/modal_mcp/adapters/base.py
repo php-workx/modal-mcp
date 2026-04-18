@@ -54,7 +54,7 @@ class ModalAdapter(Protocol):
 
     def get_app_logs(
         self,
-        app_id: str,
+        app_id: str | None,
         *,
         since: datetime | None = None,
         until: datetime | None = None,
@@ -128,6 +128,7 @@ class ModalAdapter(Protocol):
         path: str,
         *,
         encoding: str = "utf-8",
+        max_bytes: int | None = None,
     ) -> str:
         """Return a text file from a volume."""
 

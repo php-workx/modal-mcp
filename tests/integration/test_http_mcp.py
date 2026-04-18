@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,8 +12,6 @@ from fastmcp.tools.base import ToolResult
 from httpx import ASGITransport, AsyncClient
 from mcp import types as mt
 from pydantic import SecretStr
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import modal_mcp.server as server_module
 from modal_mcp.adapters.registry import get_modal_adapter
@@ -157,8 +154,14 @@ class FakeAdapter:
             )
         ]
 
-    def read_volume_text(self, volume_id: str, path: str) -> str:
-        del volume_id, path
+    def read_volume_text(
+        self,
+        volume_id: str,
+        path: str,
+        *,
+        max_bytes: int | None = None,
+    ) -> str:
+        del volume_id, path, max_bytes
         return "data"
 
     def stat_volume_path(self, volume_id: str, path: str) -> VolumeEntry | None:

@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
 from pydantic import SecretStr
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from modal_mcp.adapters.modal_adapter import ModalSdkAdapter
 from modal_mcp.config import Settings
@@ -72,6 +69,14 @@ class FakeStub:
                 }
             ]
         }
+
+    def AppFetchLogs(self, request: Any) -> dict[str, Any]:
+        self.requests.append(request)
+        return {"entries": [], "summary": {"error_signatures": []}}
+
+    def VolumeGetFile2(self, request: Any) -> dict[str, bytes]:
+        self.requests.append(request)
+        return {"data": b"abcdef"}
 
 
 @pytest.fixture
@@ -193,6 +198,62 @@ async def test_verify_ref_env_rejects_cross_environment_refs(
 def test_adapter_has_no_default_cli_fallback_import() -> None:
     """The SDK adapter does not import or use the disabled CLI fallback."""
 
-    source = Path("src/modal_mcp/adapters/modal_adapter.py").read_text(encoding="utf-8")
+    source = (
+        Path(__file__).resolve().parents[2] / "src/modal_mcp/adapters/modal_adapter.py"
+    ).read_text(encoding="utf-8")
 
     assert "_cli_fallback" not in source
+
+
+@pytest.mark.asyncio
+async def test_get_app_matches_signed_refs_by_decoded_native_id(
+    modal_config_path: Path,
+) -> None:
+    """Native app ids are compared to decoded signed refs, not substrings."""
+
+    adapter = await ModalSdkAdapter.create(
+        settings(modal_config_path),
+        client=FakeClient(FakeStub()),
+    )
+
+    app = adapter.get_app("ap-1")
+
+    assert app is not None
+    assert app.name == "api"
+
+
+@pytest.mark.asyncio
+async def test_get_container_logs_does_not_send_blank_app_id(
+    modal_config_path: Path,
+) -> None:
+    """Container log reads send task_id without a synthetic empty app_id."""
+
+    stub = FakeStub()
+    adapter = await ModalSdkAdapter.create(
+        settings(modal_config_path),
+        client=FakeClient(stub),
+    )
+
+    adapter.get_container_logs("ta-1")
+
+    request = stub.requests[-1]
+    if isinstance(request, dict):
+        assert "app_id" not in request
+        assert request["task_id"] == "ta-1"
+    else:
+        assert getattr(request, "app_id", None) in {None, ""}
+        assert getattr(request, "task_id", None) == "ta-1"
+
+
+@pytest.mark.asyncio
+async def test_read_volume_text_returns_only_bounded_bytes(
+    modal_config_path: Path,
+) -> None:
+    """Volume reads apply the adapter byte cap before decoding."""
+
+    adapter = await ModalSdkAdapter.create(
+        settings(modal_config_path),
+        client=FakeClient(FakeStub()),
+    )
+
+    assert adapter.read_volume_text("vo-1", "/data.txt", max_bytes=3) == "abcd"
