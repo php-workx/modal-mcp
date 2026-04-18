@@ -10,3 +10,5 @@ __pycache__
 .agents
 .tickets
 .secrets
+.env
+.env.*

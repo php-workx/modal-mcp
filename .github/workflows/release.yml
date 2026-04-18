@@ -13,6 +13,7 @@ permissions:
 
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
+  SYFT_VERSION: "1.42.4"
 
 jobs:
   publish:
@@ -46,7 +47,12 @@ jobs:
           cp dist/* release-artifacts/
 
       - name: Install Syft
-        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+        run: |
+          curl -sSfL -o "syft_${SYFT_VERSION}_linux_amd64.tar.gz" "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          curl -sSfL -o checksums.txt "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_checksums.txt"
+          grep " syft_${SYFT_VERSION}_linux_amd64.tar.gz$" checksums.txt | sha256sum -c -
+          tar -xzf "syft_${SYFT_VERSION}_linux_amd64.tar.gz" syft
+          install -m 0755 syft /usr/local/bin/syft
 
       - name: Generate SBOM with Syft
         run: syft packages . -o spdx-json=release-artifacts/modal-mcp.spdx.json

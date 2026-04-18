@@ -66,7 +66,9 @@ type-check:
 # Lint GitHub Actions workflows.
 actionlint:
     @command -v actionlint >/dev/null 2>&1 || { echo "error: actionlint is required for this gate" >&2; exit 127; }
-    @if [ -d .github/workflows ]; then actionlint .github/workflows/*.yml; fi
+    @if [ -d .github/workflows ]; then \
+        find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 -r actionlint; \
+    fi
 
 # Lint shell hook files.
 shellcheck:

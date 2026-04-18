@@ -60,7 +60,7 @@ jobs:
     name: Semantic Scan
     runs-on: ubuntu-latest
     container:
-      image: semgrep/semgrep
+      image: semgrep/semgrep@sha256:d7d67e1e0c0ed26278ab35f0be082f0afdfd7a880f4927aee86f8127fdbce617
     timeout-minutes: 20
 
     steps:
@@ -71,7 +71,7 @@ jobs:
         run: semgrep scan --config auto --error --sarif --output semgrep.sarif .
 
       - name: Upload Semgrep SARIF
-        if: always() && hashFiles('semgrep.sarif') != ''
+        if: always() && hashFiles('semgrep.sarif') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: semgrep.sarif
@@ -88,7 +88,7 @@ jobs:
           fetch-depth: 0
 
       - name: Scan repository for secrets
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@47e7b7cd74f578e1e3145d48f669f22fd1330ca6 # v3.94.3
         with:
           extra_args: --results=verified,unknown
 
