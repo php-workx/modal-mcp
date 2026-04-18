@@ -111,7 +111,7 @@ schema-update:
 # --- Security ---
 
 # Security gate: dependency vulnerabilities, local secret scan, and SAST.
-security: vuln gitleaks semgrep
+security: vuln betterleaks semgrep
 
 # Scan locked Python dependencies for known vulnerabilities.
 vuln:
@@ -127,9 +127,9 @@ uv-audit:
     uv audit --preview-features audit --frozen
 
 # Scan git history for leaked secrets locally. CI uses TruffleHog.
-gitleaks:
-    @command -v gitleaks >/dev/null 2>&1 || { echo "error: gitleaks is required for this gate" >&2; exit 127; }
-    gitleaks git --no-banner
+betterleaks:
+    @command -v betterleaks >/dev/null 2>&1 || { echo "error: betterleaks is required for this gate" >&2; exit 127; }
+    betterleaks git --no-banner
 
 # Run Semgrep SAST.
 semgrep:
