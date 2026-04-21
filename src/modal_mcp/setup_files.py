@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import contextlib
 import os
+import secrets
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
 
 # Private directory: owner rwx only
@@ -17,6 +19,12 @@ _PRIVATE_DIR_MODE = 0o700
 
 # Secret file: owner rw only
 _SECRET_FILE_MODE = 0o600
+
+#: HMAC signing key length in bytes (32 bytes → 64 hex chars for HMAC-SHA256).
+_SIGNING_KEY_BYTES: int = 32
+
+#: Default entries added by :func:`ensure_gitignore_entries`.
+_DEFAULT_GITIGNORE_ENTRIES: tuple[str, ...] = (".env", ".env.*", ".secrets/")
 
 
 class SetupFilesError(OSError):
@@ -142,8 +150,169 @@ def write_secret(
     return p
 
 
+def safe_write_text(
+    path: Path | str,
+    content: str,
+    *,
+    overwrite: bool = False,
+    encoding: str = "utf-8",
+) -> Path:
+    """Atomically write *content* to *path* as a plain text file.
+
+    Unlike :func:`write_secret` this helper does **not** enforce private
+    directory or file permissions; it is suitable for non-secret files such as
+    ``.gitignore`` or configuration files placed in a shared project root.
+
+    Guarantees:
+    - **Symlink refusal**: raises :class:`SetupFilesError` if *path* is a
+      symlink (checked before and after the write to guard against races).
+    - **Atomic write**: content is written to a sibling temp file which is then
+      renamed into place; readers never observe a partial file.
+    - **Preserve by default**: when *overwrite* is ``False`` (the default) and
+      *path* already exists the function returns immediately without touching
+      the file.
+
+    Parameters
+    ----------
+    path:
+        Destination path for the file.
+    content:
+        Text content to write.
+    overwrite:
+        When ``True`` an existing file is replaced atomically.  Defaults to
+        ``False`` so that pre-existing files are preserved.
+    encoding:
+        Text encoding used to convert *content* to bytes.  Defaults to
+        ``utf-8``.
+
+    Returns
+    -------
+    Path
+        The resolved path that was written (or preserved).
+
+    Raises
+    ------
+    SetupFilesError
+        If *path* is or becomes a symlink.
+    """
+    p = Path(path).expanduser()
+
+    if p.is_symlink():
+        msg = f"refusing to write: target is a symlink: {p}"
+        raise SetupFilesError(msg)
+
+    if not overwrite and p.exists():
+        return p
+
+    p.parent.mkdir(parents=True, exist_ok=True)
+
+    encoded = content.encode(encoding)
+    tmp_path: Path | None = None
+    try:
+        fd, tmp_str = tempfile.mkstemp(dir=str(p.parent), prefix=".tmp_")
+        tmp_path = Path(tmp_str)
+        try:
+            os.write(fd, encoded)
+        finally:
+            os.close(fd)
+
+        # Race-condition guard: re-check that the destination has not become a
+        # symlink between our initial check and the rename.
+        if p.is_symlink():
+            msg = f"refusing to write: target became a symlink: {p}"
+            raise SetupFilesError(msg)
+
+        tmp_path.replace(p)
+        tmp_path = None  # rename succeeded; suppress cleanup
+    finally:
+        if tmp_path is not None:
+            with contextlib.suppress(OSError):
+                tmp_path.unlink()
+
+    return p
+
+
+def ensure_gitignore_entries(
+    path: Path | str,
+    entries: Sequence[str] = _DEFAULT_GITIGNORE_ENTRIES,
+) -> bool:
+    """Add *entries* to a gitignore file at *path* idempotently.
+
+    Entries already present in the file are skipped.  The file is created if it
+    does not exist.  Missing entries are appended at the end, each on its own
+    line.
+
+    The default *entries* cover the three standard setup artefacts:
+
+    - ``.env``
+    - ``.env.*``
+    - ``.secrets/``
+
+    Parameters
+    ----------
+    path:
+        Path to the ``.gitignore`` file to update (or create).
+    entries:
+        Lines to ensure are present.  Defaults to :data:`_DEFAULT_GITIGNORE_ENTRIES`.
+
+    Returns
+    -------
+    bool
+        ``True`` when at least one entry was added and the file was modified;
+        ``False`` when all entries were already present (file unchanged).
+    """
+    p = Path(path).expanduser()
+    if p.is_symlink():
+        msg = f"refusing to update gitignore: target is a symlink: {p}"
+        raise SetupFilesError(msg)
+
+    existing_text = p.read_text(encoding="utf-8") if p.exists() else ""
+    existing_lines = existing_text.splitlines()
+    # Strip whitespace for comparison to handle trailing spaces and CRLF line endings.
+    existing_stripped = {line.strip() for line in existing_lines}
+
+    to_add = [e for e in entries if e not in existing_stripped]
+
+    if not to_add:
+        return False
+
+    # Append missing entries, ensuring the file ends with a newline before them.
+    new_content = existing_text
+    if new_content and not new_content.endswith("\n"):
+        new_content += "\n"
+    new_content += "\n".join(to_add) + "\n"
+
+    safe_write_text(p, new_content, overwrite=True)
+
+    return True
+
+
+def generate_signing_key(kid: str) -> str:
+    """Return a fresh HMAC-SHA256 signing key in ``kid:hex`` format.
+
+    The hex portion is 64 lowercase hexadecimal characters derived from 32
+    cryptographically random bytes, giving a 256-bit key suitable for
+    HMAC-SHA256.
+
+    Parameters
+    ----------
+    kid:
+        Key ID to embed in the returned string.
+
+    Returns
+    -------
+    str
+        A string of the form ``<kid>:[0-9a-f]{64}``.
+    """
+    key_bytes = secrets.token_bytes(_SIGNING_KEY_BYTES)
+    return f"{kid}:{key_bytes.hex()}"
+
+
 __all__ = [
     "SetupFilesError",
+    "ensure_gitignore_entries",
     "ensure_private_dir",
+    "generate_signing_key",
+    "safe_write_text",
     "write_secret",
 ]

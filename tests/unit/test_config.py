@@ -326,6 +326,163 @@ def test_expert_proc_masking_helper_refuses_missing_mount_binary(
     )
 
 
+def test_settings_load_from_env_file(tmp_path: Path) -> None:
+    """Settings reads values from a .env file when passed via _env_file."""
+
+    signing_key = "kid1:" + "a" * 64
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "MODAL_TOKEN_ID=dotenv-tid\n"
+        "MODAL_TOKEN_SECRET=dotenv-tsecret\n"
+        "MODAL_MCP_ALLOWED_ORIGINS=http://127.0.0.1:8765\n"
+        f"MODAL_MCP_SIGNING_KEYS={signing_key}\n",
+        encoding="utf-8",
+    )
+
+    settings = Settings(_env_file=str(env_file))
+
+    assert settings.modal_token_id is not None
+    assert settings.modal_token_id.get_secret_value() == "dotenv-tid"
+    assert settings.modal_token_secret is not None
+    assert settings.modal_token_secret.get_secret_value() == "dotenv-tsecret"
+    assert settings.modal_mcp_allowed_origins == ("http://127.0.0.1:8765",)
+    assert settings.modal_mcp_signing_keys is not None
+    assert settings.modal_mcp_signing_keys.get_secret_value() == signing_key
+
+
+def test_settings_env_var_overrides_env_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Real environment variables take priority over _env_file values."""
+
+    signing_key = "kid1:" + "a" * 64
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "MODAL_TOKEN_ID=dotenv-tid\n"
+        "MODAL_TOKEN_SECRET=dotenv-tsecret\n"
+        "MODAL_MCP_ALLOWED_ORIGINS=http://127.0.0.1:8765\n"
+        f"MODAL_MCP_SIGNING_KEYS={signing_key}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MODAL_TOKEN_ID", "env-tid")
+    monkeypatch.setenv("MODAL_TOKEN_SECRET", "env-tsecret")
+
+    settings = Settings(_env_file=str(env_file))
+
+    assert settings.modal_token_id is not None
+    assert settings.modal_token_id.get_secret_value() == "env-tid"
+    assert settings.modal_token_secret is not None
+    assert settings.modal_token_secret.get_secret_value() == "env-tsecret"
+
+
+def test_settings_constructor_overrides_env_file(
+    tmp_path: Path,
+    modal_config_path: Path,
+) -> None:
+    """Constructor kwargs take priority over _env_file values."""
+
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "MODAL_MCP_LOG_LEVEL=debug\n",
+        encoding="utf-8",
+    )
+
+    settings = Settings(
+        _env_file=str(env_file),
+        **base_settings_kwargs(modal_config_path),
+        modal_mcp_log_level="warn",
+    )
+
+    assert settings.modal_mcp_log_level == "warn"
+
+
+def test_settings_missing_env_file_does_not_fail(
+    tmp_path: Path,
+    modal_config_path: Path,
+) -> None:
+    """A non-existent _env_file path is silently ignored; Settings still initialises."""
+
+    missing = tmp_path / "nonexistent.env"
+    assert not missing.exists()
+
+    settings = Settings(
+        _env_file=str(missing), **base_settings_kwargs(modal_config_path)
+    )
+
+    assert settings.modal_mcp_http_bind == "127.0.0.1:8765"
+
+
+def test_settings_autoloads_cwd_dotenv(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Settings() with no explicit _env_file reads .env from the process CWD."""
+
+    signing_key = "kid1:" + "a" * 64
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "MODAL_TOKEN_ID=dotenv-tid\n"
+        "MODAL_TOKEN_SECRET=dotenv-tsecret\n"
+        "MODAL_MCP_ALLOWED_ORIGINS=http://127.0.0.1:8765\n"
+        f"MODAL_MCP_SIGNING_KEYS={signing_key}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    settings = Settings()
+
+    assert settings.modal_token_id is not None
+    assert settings.modal_token_id.get_secret_value() == "dotenv-tid"
+    assert settings.modal_token_secret is not None
+    assert settings.modal_token_secret.get_secret_value() == "dotenv-tsecret"
+    assert settings.modal_mcp_allowed_origins == ("http://127.0.0.1:8765",)
+    assert settings.modal_mcp_signing_keys is not None
+    assert settings.modal_mcp_signing_keys.get_secret_value() == signing_key
+
+
+def test_settings_env_var_overrides_cwd_dotenv(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Real environment variables take priority over CWD .env values."""
+
+    signing_key = "kid1:" + "a" * 64
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "MODAL_TOKEN_ID=dotenv-tid\n"
+        "MODAL_TOKEN_SECRET=dotenv-tsecret\n"
+        "MODAL_MCP_ALLOWED_ORIGINS=http://127.0.0.1:8765\n"
+        f"MODAL_MCP_SIGNING_KEYS={signing_key}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("MODAL_TOKEN_ID", "env-tid")
+    monkeypatch.setenv("MODAL_TOKEN_SECRET", "env-tsecret")
+
+    settings = Settings()
+
+    assert settings.modal_token_id is not None
+    assert settings.modal_token_id.get_secret_value() == "env-tid"
+    assert settings.modal_token_secret is not None
+    assert settings.modal_token_secret.get_secret_value() == "env-tsecret"
+
+
+def test_settings_missing_cwd_dotenv_does_not_fail(
+    tmp_path: Path,
+    modal_config_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Settings() does not raise when no .env exists in CWD."""
+
+    assert not (tmp_path / ".env").exists()
+    monkeypatch.chdir(tmp_path)
+
+    settings = Settings(**base_settings_kwargs(modal_config_path))
+
+    assert settings.modal_mcp_http_bind == "127.0.0.1:8765"
+
+
 def test_scrub_secret_env_removes_secret_carriers(
     monkeypatch: pytest.MonkeyPatch,
     modal_config_path: Path,

@@ -13,5 +13,10 @@ coverage.xml
 dist/
 htmlcov/
 
+# Local setup – generated secrets and environment files (never commit)
+.env
+.env.*
+.secrets/
+
 # AgentOps session artifacts (auto-added)
 .agents/
