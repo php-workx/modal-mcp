@@ -10,20 +10,17 @@ default:
 
 # --- Quality gates ---
 
-# Fast pre-commit gate: formatting, linting, typing, schema drift, and fast tests.
-pre-commit: fmt lint type-check schema-check test-fast
+# Fast pre-commit gate: format, lint, workflow/hook lint, type check, schema check, and fast tests.
+pre-commit: fmt lint actionlint shellcheck type-check schema-check test-fast
 
 # Pre-push gate: pre-commit checks plus full tests and local security scans.
 pre-push: pre-commit test security
 
-# Local quality gate without release/container jobs.
-check-local: pre-push actionlint shellcheck
-
-# Alias for the full local quality gate.
-check: check-local
+# Full local quality gate without release/container jobs.
+check: pre-push
 
 # Developer shorthand.
-dev: check-local
+dev: check
     @echo "All local checks completed."
 
 # Language CI gate used by humans, hooks, and CI when validating Python-only changes.
@@ -134,7 +131,7 @@ betterleaks:
 # Run Semgrep SAST.
 semgrep:
     @command -v semgrep >/dev/null 2>&1 || { echo "error: semgrep is required for this gate" >&2; exit 127; }
-    semgrep scan --config auto --error .
+    semgrep scan --config auto --error --no-git-ignore .
 
 # --- Packaging ---
 
@@ -163,7 +160,7 @@ pre-commit-run:
 
 # Full developer setup.
 setup: install-dev hooks-install
-    @echo "Development environment ready. Run: just check-local"
+    @echo "Development environment ready. Run: just check"
 
 # Remove build artifacts and local caches.
 clean:
