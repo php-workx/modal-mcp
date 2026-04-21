@@ -29,6 +29,9 @@ uv run modal-mcp setup --yes
 uv run modal-mcp doctor --env-file .env
 ```
 
+This fixes the missing `.env` and signing-key checks. `doctor` can still return
+exit code `3` until Modal credentials are configured.
+
 ## Signing Key Is Missing Or Invalid
 
 Symptoms:
@@ -64,6 +67,9 @@ Fix options:
 2. Prefer a dedicated Viewer-scoped service-user token and file-backed secrets.
 
 File-backed token example:
+
+Replace the placeholder values with a real non-production service-user token
+before running the diagnostic command:
 
 ```bash
 mkdir -p .secrets

@@ -1,8 +1,8 @@
 # Self-Hosting Modal MCP
 
 This guide describes the supported v1 deployment path: a self-hosted,
-read-only Modal MCP server running FastMCP Streamable HTTP at `/mcp` via
-Docker Compose only.
+read-only Modal MCP server running FastMCP Streamable HTTP at `/mcp` on a
+local machine or a self-managed host.
 
 ## Scope
 
@@ -33,11 +33,15 @@ Unsupported v1 targets and non-goals:
 non-credential server config and a signing key without touching Modal
 credentials.
 
+The examples use `uv run modal-mcp` so they work from a source checkout without
+activating `.venv`. If you have installed the package into your active shell,
+`modal-mcp` can be used directly.
+
 ### Step 1 — Generate local config
 
 ```bash
 uv sync --extra dev
-modal-mcp setup --yes
+uv run modal-mcp setup --yes
 ```
 
 `setup --yes` creates two files (idempotent — existing files are preserved):
@@ -54,7 +58,7 @@ must be supplied separately (see credential paths below).
 ### Step 2 — Verify the installation
 
 ```bash
-modal-mcp doctor
+uv run modal-mcp doctor --env-file .env
 ```
 
 `doctor` runs without loading the full server settings and reports on:
@@ -92,7 +96,7 @@ Export the environment config and start the server:
 ```bash
 export MODAL_MCP_ALLOWED_HOSTS=127.0.0.1,localhost
 export MODAL_ENVIRONMENT=dev
-modal-mcp run --env-file .env
+uv run modal-mcp run --env-file .env
 ```
 
 #### Path B — file-backed service-user token (recommended)
@@ -103,6 +107,8 @@ or configure a scoped service-user token; you must create the service-user and
 token yourself (Modal dashboard → Settings → Service users, or `modal token new`).
 
 Store the token in file-backed secrets:
+
+Replace the placeholder values with a real non-production service-user token:
 
 ```bash
 mkdir -p .secrets
@@ -118,7 +124,7 @@ export MODAL_TOKEN_ID_FILE=$PWD/.secrets/modal-token-id
 export MODAL_TOKEN_SECRET_FILE=$PWD/.secrets/modal-token-secret
 export MODAL_MCP_ALLOWED_HOSTS=127.0.0.1,localhost
 export MODAL_ENVIRONMENT=dev
-modal-mcp run --env-file .env
+uv run modal-mcp run --env-file .env
 ```
 
 Never put `MODAL_TOKEN_ID` or `MODAL_TOKEN_SECRET` values directly in `.env`.
@@ -149,20 +155,20 @@ Print the config block for your agent client before writing any files:
 
 ```bash
 # Codex CLI — stdio transport (Codex launches modal-mcp as a subprocess)
-modal-mcp print-agent-config --target codex
+uv run modal-mcp print-agent-config --target codex --env-file "$PWD/.env"
 
 # Claude Desktop — SSE transport (server must already be running)
-modal-mcp print-agent-config --target claude
+uv run modal-mcp print-agent-config --target claude --env-file "$PWD/.env"
 ```
 
 ### Installing into Codex CLI
 
 ```bash
 # Preview the change without writing anything
-modal-mcp setup --install codex --env-file /absolute/path/to/.env --dry-run
+uv run modal-mcp setup --install codex --env-file "$PWD/.env" --dry-run
 
 # Write the [mcp_servers.modal-mcp] entry to ~/.codex/config.toml
-modal-mcp setup --install codex --env-file /absolute/path/to/.env --yes
+uv run modal-mcp setup --install codex --env-file "$PWD/.env" --yes
 ```
 
 The install command:
@@ -185,10 +191,10 @@ automatically:
 
 ```bash
 # Preview the change without writing anything
-modal-mcp setup --install claude --dry-run
+uv run modal-mcp setup --install claude --dry-run
 
 # Write the mcpServers.modal-mcp entry to claude_desktop_config.json
-modal-mcp setup --install claude --yes
+uv run modal-mcp setup --install claude --yes
 ```
 
 The install command:
@@ -217,10 +223,12 @@ export MODAL_MCP_SIGNING_KEYS=kid1:$(openssl rand -hex 32)
 export MODAL_MCP_ALLOWED_ORIGINS=http://127.0.0.1:8765
 export MODAL_MCP_ALLOWED_HOSTS=127.0.0.1,localhost
 export MODAL_ENVIRONMENT=dev
-uv run modal-mcp
+uv run modal-mcp run
 ```
 
 **Manual file-backed secrets (Path B variant):**
+
+Replace the placeholder values with a real non-production service-user token:
 
 ```bash
 mkdir -p .secrets
@@ -235,7 +243,7 @@ export MODAL_MCP_SIGNING_KEY_FILE=$PWD/.secrets/modal-mcp-signing-key
 export MODAL_MCP_ALLOWED_ORIGINS=http://127.0.0.1:8765
 export MODAL_MCP_ALLOWED_HOSTS=127.0.0.1,localhost
 export MODAL_ENVIRONMENT=dev
-uv run modal-mcp
+uv run modal-mcp run
 ```
 
 ## Required Environment Variables

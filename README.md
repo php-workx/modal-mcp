@@ -66,7 +66,8 @@ are used automatically. `modal-mcp doctor` warns when it finds them because they
 often belong to a personal editor or admin account.
 
 For regular use, create a dedicated Modal service-user token with Viewer access
-and store it in files:
+and store it in files. Replace the placeholder values before running the
+diagnostic or server commands:
 
 ```bash
 mkdir -p .secrets

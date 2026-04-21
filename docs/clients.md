@@ -9,12 +9,18 @@ Run setup first:
 ```bash
 uv sync --extra dev
 uv run modal-mcp setup --yes
-uv run modal-mcp doctor --env-file .env
 ```
 
 If you have installed the package into your active shell, `modal-mcp` can be
 used directly. The examples use `uv run modal-mcp` so they work from a source
 checkout without activating `.venv`.
+
+After Modal credentials are available through `~/.modal.toml` or file-backed
+token variables, verify the setup:
+
+```bash
+uv run modal-mcp doctor --env-file .env
+```
 
 ## Codex CLI
 

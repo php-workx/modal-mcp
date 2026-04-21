@@ -39,7 +39,7 @@ After cloning, bootstrap a working local environment with the CLI:
 
 ```bash
 uv sync --extra dev
-modal-mcp setup --yes
+uv run modal-mcp setup --yes
 ```
 
 `setup --yes` generates two files (idempotent):
@@ -50,7 +50,7 @@ modal-mcp setup --yes
 Verify the installation before starting the server:
 
 ```bash
-modal-mcp doctor
+uv run modal-mcp doctor --env-file .env
 ```
 
 `doctor` checks package imports, `.env` presence, signing key, origins,
@@ -80,20 +80,20 @@ the `.env` file.  The generated `.env` enforces this by design.
 Print the config block for your agent client to review before writing any files:
 
 ```bash
-modal-mcp print-agent-config --target codex   # TOML block for Codex CLI
-modal-mcp print-agent-config --target claude  # JSON block for Claude Desktop
+uv run modal-mcp print-agent-config --target codex --env-file "$PWD/.env"
+uv run modal-mcp print-agent-config --target claude --env-file "$PWD/.env"
 ```
 
 To install automatically into Codex CLI or Claude Desktop, use `--install`:
 
 ```bash
 # Codex CLI — preview then write the [mcp_servers.modal-mcp] entry
-modal-mcp setup --install codex --env-file /absolute/path/to/.env --dry-run
-modal-mcp setup --install codex --env-file /absolute/path/to/.env --yes
+uv run modal-mcp setup --install codex --env-file "$PWD/.env" --dry-run
+uv run modal-mcp setup --install codex --env-file "$PWD/.env" --yes
 
 # Claude Desktop — preview then write the mcpServers.modal-mcp SSE entry
-modal-mcp setup --install claude --dry-run
-modal-mcp setup --install claude --yes
+uv run modal-mcp setup --install claude --dry-run
+uv run modal-mcp setup --install claude --yes
 ```
 
 Both install commands back up the existing config, write atomically, validate
