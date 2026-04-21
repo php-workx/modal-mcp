@@ -33,6 +33,74 @@ artifact is a valid release.
 - avoid unrelated refactors in the same PR
 - describe user-facing impact clearly in the PR body
 
+## Local setup
+
+After cloning, bootstrap a working local environment with the CLI:
+
+```bash
+uv sync --extra dev
+modal-mcp setup --yes
+```
+
+`setup --yes` generates two files (idempotent):
+
+- `.env` — signing key path and allowed origins; **no Modal credentials**
+- `.secrets/signing-key.txt` — HMAC signing key (mode `0600`)
+
+Verify the installation before starting the server:
+
+```bash
+modal-mcp doctor
+```
+
+`doctor` checks package imports, `.env` presence, signing key, origins,
+read-only readiness, enabled toolsets, and Modal credential sources without
+loading the full server settings. Exit code is `0` when all checks pass;
+`3` when warnings exist but no check fails (partial-ready); `1` when at least
+one check fails.
+
+### Credential safety
+
+`modal-mcp setup` does **not** create or configure a Modal service-user token.
+You must supply Modal credentials separately:
+
+- **Recommended:** create a dedicated service-user with Viewer permissions in a
+  non-production Modal workspace.  Store the token in `.secrets/modal-token-id`
+  and `.secrets/modal-token-secret` (mode `0600`), then set
+  `MODAL_TOKEN_ID_FILE` / `MODAL_TOKEN_SECRET_FILE` at runtime.
+- **Fallback:** `~/.modal.toml` is picked up automatically if present.
+  `doctor` warns when that file exists because it often contains personal or
+  admin credentials with broader permissions than the read-only server requires.
+
+Never add `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, or `MODAL_ENVIRONMENT` to
+the `.env` file.  The generated `.env` enforces this by design.
+
+### Agent config
+
+Print the config block for your agent client to review before writing any files:
+
+```bash
+modal-mcp print-agent-config --target codex   # TOML block for Codex CLI
+modal-mcp print-agent-config --target claude  # JSON block for Claude Desktop
+```
+
+To install automatically into Codex CLI or Claude Desktop, use `--install`:
+
+```bash
+# Codex CLI — preview then write the [mcp_servers.modal-mcp] entry
+modal-mcp setup --install codex --env-file /absolute/path/to/.env --dry-run
+modal-mcp setup --install codex --env-file /absolute/path/to/.env --yes
+
+# Claude Desktop — preview then write the mcpServers.modal-mcp SSE entry
+modal-mcp setup --install claude --dry-run
+modal-mcp setup --install claude --yes
+```
+
+Both install commands back up the existing config, write atomically, validate
+the round-trip, and are idempotent (no-op when the entry already matches).
+`--install claude` does not require `--env-file` because Claude Desktop
+connects over SSE to a separately-started server.
+
 ## Local quality gates
 
 Install the local command runners before using the validation targets:
@@ -53,9 +121,9 @@ just setup
 The checked-in hooks delegate to the same `just` targets used by maintainers:
 
 ```bash
-just pre-commit   # format, lint, type check, schema drift, fast tests
+just pre-commit   # format, lint, workflow/hook lint, type check, schema drift, fast tests
 just pre-push     # pre-commit gate, full tests, vulnerability/security scans
-just check-local  # pre-push gate plus workflow and hook linting
+just check        # full local quality gate (alias for pre-push)
 ```
 
 Use targeted commands while iterating:
@@ -71,5 +139,5 @@ just betterleaks
 just semgrep
 ```
 
-Local secret scanning uses Gitleaks through the `just` targets. CI runs
+Local secret scanning uses Betterleaks through the `just` targets. CI runs
 TruffleHog for repository secret scanning.
