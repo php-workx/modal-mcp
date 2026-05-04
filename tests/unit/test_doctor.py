@@ -1359,13 +1359,13 @@ class TestDoctorCli:
         monkeypatch.chdir(tmp_path)
         from modal_mcp.__main__ import main
 
-        main(["setup", "--yes"])
-        # Capture doctor output after setup (partial-ready state).
+        # Run doctor in a clean directory (no .env, no signing key).
+        # Package imports succeed, but env/signing-key/origins are missing,
+        # producing warnings without failures -> exit code 3 (partial-ready).
         result = main(["doctor"])
-        assert result == 0
-        captured = capsys.readouterr()
-        # Must mention "partial" in its summary line.
-        assert "partial" in captured.out.lower() or "warn" in captured.out.lower()
+        assert result == 3
+        out = capsys.readouterr().out
+        assert "partial ready" in out.lower()
 
 
 # ---------------------------------------------------------------------------

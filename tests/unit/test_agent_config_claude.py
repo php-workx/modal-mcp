@@ -228,9 +228,9 @@ def test_claude_contract_env_file_strategy_is_not_applicable() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_claude_command_format_uses_absolute_env_file() -> None:
+def test_claude_command_format_uses_absolute_env_file(tmp_path: Path) -> None:
     """format_startup_command() must produce a command with an absolute path."""
-    abs_env = "/home/user/project/.env"
+    abs_env = str(tmp_path / ".env")
     cmd = format_startup_command(abs_env)
     assert "--env-file" in cmd
     env_file_idx = list(cmd).index("--env-file")
@@ -245,16 +245,16 @@ def test_format_startup_command_rejects_relative_path() -> None:
         format_startup_command("relative/.env")
 
 
-def test_format_startup_command_accepts_path_object() -> None:
+def test_format_startup_command_accepts_path_object(tmp_path: Path) -> None:
     """format_startup_command() must accept a Path as well as a string."""
-    abs_path = Path("/tmp/myproject/.env")
+    abs_path = tmp_path / ".env"
     cmd = format_startup_command(abs_path)
     assert str(abs_path) in cmd
 
 
-def test_format_startup_command_includes_env_file_flag() -> None:
+def test_format_startup_command_includes_env_file_flag(tmp_path: Path) -> None:
     """format_startup_command() output must include CLAUDE_ENV_FILE_FLAG."""
-    cmd = format_startup_command("/tmp/.env")
+    cmd = format_startup_command(str(tmp_path / ".env"))
     assert CLAUDE_ENV_FILE_FLAG in cmd
 
 

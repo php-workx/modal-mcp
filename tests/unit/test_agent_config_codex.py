@@ -692,20 +692,20 @@ def test_format_config_snippet_contains_env_file_flag() -> None:
 
 
 def test_format_config_snippet_default_env_file_is_absolute() -> None:
-    """Default placeholder in format_config_snippet() must start with '/'."""
+    """Default placeholder in format_config_snippet() must be absolute-looking."""
     snippet = format_config_snippet()
     parsed = tomllib.loads(snippet)
     args = parsed[CODEX_TOP_LEVEL_KEY][CODEX_SERVER_NAME]["args"]
     env_file_idx = args.index("--env-file")
     env_path = args[env_file_idx + 1]
-    assert env_path.startswith("/"), (
+    assert Path(env_path).is_absolute() or env_path.startswith("/"), (
         f"Default env-file placeholder must be an absolute path; got: {env_path!r}"
     )
 
 
-def test_format_config_snippet_with_absolute_env_file() -> None:
+def test_format_config_snippet_with_absolute_env_file(tmp_path: Path) -> None:
     """Supplying an absolute env_file must embed that path in the snippet."""
-    abs_path = "/home/user/myproject/.env"
+    abs_path = str(tmp_path / ".env")
     snippet = format_config_snippet(env_file=abs_path)
     assert abs_path in snippet
     parsed = tomllib.loads(snippet)
@@ -713,9 +713,9 @@ def test_format_config_snippet_with_absolute_env_file() -> None:
     assert abs_path in args
 
 
-def test_format_config_snippet_with_path_object() -> None:
+def test_format_config_snippet_with_path_object(tmp_path: Path) -> None:
     """format_config_snippet() must accept a pathlib.Path for env_file."""
-    abs_path = Path("/tmp/project/.env")
+    abs_path = tmp_path / ".env"
     snippet = format_config_snippet(env_file=abs_path)
     assert str(abs_path) in snippet
 
