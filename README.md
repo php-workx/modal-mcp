@@ -38,7 +38,10 @@ v1 is a local read-only beta.
 ### One-liner (recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/php-workx/modal-mcp/refs/heads/main/install.sh | sh
+# Pin to a release tag for supply-chain safety
+curl -fsSL https://raw.githubusercontent.com/php-workx/modal-mcp/refs/tags/v0.1.0/install.sh -o install.sh
+# Verify checksum against release notes, then execute:
+sh install.sh
 ```
 
 This script auto-detects your Python toolchain and installs `modal-mcp` with the best available method:
