@@ -252,14 +252,17 @@ def format_config_snippet(
             raise ValueError(msg)
         env_path_str = str(env_file_path)
 
+    def _escape_toml(s: str) -> str:
+        return s.replace("\\", "\\\\").replace('"', '"')
+
     rendered_args = [
         arg.format(env_file=env_path_str) if "{env_file}" in arg else arg
         for arg in CODEX_SERVER_ARGS_TEMPLATE
     ]
-    args_toml = ", ".join(f'"{a}"' for a in rendered_args)
+    args_toml = ", ".join(f'"{_escape_toml(a)}"' for a in rendered_args)
     return (
         f"[{CODEX_TOP_LEVEL_KEY}.{CODEX_SERVER_NAME}]\n"
-        f'command = "{command}"\n'
+        f'command = "{_escape_toml(command)}"\n'
         f"args = [{args_toml}]\n"
     )
 

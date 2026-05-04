@@ -207,36 +207,39 @@ def _write_env_idempotent(path: Path, content: str, *, overwrite: bool = False) 
     if path.exists() and not overwrite:
         return False  # preserve existing
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    encoded: bytes = content.encode()
-    tmp_path: Path | None = None
     try:
-        fd, tmp_str = tempfile.mkstemp(dir=str(path.parent), prefix=".tmp_env_")
-        tmp_path = Path(tmp_str)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        encoded: bytes = content.encode()
+        tmp_path: Path | None = None
         try:
-            if os.name == "posix":
-                # Restrict before writing so data is never visible to other users.
-                os.chmod(fd, 0o600)
-            os.write(fd, encoded)
+            fd, tmp_str = tempfile.mkstemp(dir=str(path.parent), prefix=".tmp_env_")
+            tmp_path = Path(tmp_str)
+            try:
+                if os.name == "posix":
+                    # Restrict before writing so data is never visible to other users.
+                    os.chmod(fd, 0o600)
+                os.write(fd, encoded)
+            finally:
+                os.close(fd)
+
+            # Race guard: re-check that the destination has not
+            if path.is_symlink():
+                msg = f"refusing to write env file: target became a symlink: {path}"
+                raise SetupFilesError(msg)
+
+            tmp_path.replace(path)
+            tmp_path = None
+
         finally:
-            os.close(fd)
+            if tmp_path is not None:
+                with contextlib.suppress(OSError):
+                    tmp_path.unlink()
 
-        # Race-condition guard: re-check that the destination hasn't become a symlink.
-        if path.is_symlink():
-            msg = f"refusing to write env file: target became a symlink: {path}"
-            raise SetupFilesError(msg)
-
-        tmp_path.replace(path)
-        tmp_path = None
-
-    finally:
-        if tmp_path is not None:
-            with contextlib.suppress(OSError):
-                tmp_path.unlink()
-
-    if os.name == "posix":
-        path.chmod(0o600)
+        if os.name == "posix":
+            path.chmod(0o600)
+    except OSError as exc:
+        raise SetupFilesError(f"failed to write env file {path}: {exc}") from exc
 
     return True
 
@@ -297,7 +300,12 @@ def run_setup(
     # bypassing their symlink guard.  .absolute() makes the path absolute by
     # prepending CWD when relative, without touching symlinks in any component.
     env_path = Path(env_file).expanduser().absolute()
-    key_path = (Path(secrets_dir).expanduser() / signing_key_name).absolute()
+    secrets_path = Path(secrets_dir).expanduser()
+    # When secrets_dir is a relative default, anchor it to the setup root
+    # (the directory containing env_file) so the secret stays with the project.
+    if not secrets_path.is_absolute():
+        secrets_path = env_path.parent / secrets_path
+    key_path = (secrets_path / signing_key_name).absolute()
 
     # Capture pre-existing state *before* writing, so that the result flags
     # reflect what was on disk at call time rather than what we produced.
