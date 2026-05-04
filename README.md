@@ -32,6 +32,41 @@ v1 is a local read-only beta.
 | Hosted OAuth / multi-tenant service | Not part of v1 |
 | Helm / Kubernetes packaging | Deferred |
 
+## Installation
+
+### One-liner (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/php-workx/modal-mcp/refs/heads/main/install.sh | sh
+```
+
+This script auto-detects your Python toolchain and installs `modal-mcp` with the best available method:
+
+| Toolchain | Command used | Notes |
+|-----------|-------------|-------|
+| **uv** (preferred) | `uv tool install modal-mcp` | Fast, isolated, no virtualenv needed |
+| **pipx** | `pipx install modal-mcp` | Good isolation, widely available |
+| **pip** (fallback) | `pip install --user modal-mcp` | Always works, requires PATH setup |
+
+### From source
+
+```bash
+git clone https://github.com/php-workx/modal-mcp.git
+cd modal-mcp
+uv sync --extra dev
+uv run modal-mcp --help
+```
+
+### PyPI
+
+```bash
+uv tool install modal-mcp
+# or
+pipx install modal-mcp
+# or
+pip install --user modal-mcp
+```
+
 ## Quickstart
 
 Install from source and generate local server settings:

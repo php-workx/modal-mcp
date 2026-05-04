@@ -66,11 +66,29 @@ jobs:
             cosign sign-blob --yes --bundle "release-artifacts/$(basename "$artifact").bundle" "$artifact"
           done
 
+      - name: Generate checksums
+        run: |
+          cd release-artifacts
+          sha256sum -- * > checksums.txt
+          cd ..
+          echo "Generated checksums:"
+          cat release-artifacts/checksums.txt
+
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: modal-mcp-release-artifacts
           path: release-artifacts/
+
+      - name: Attach artifacts to GitHub release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          for f in release-artifacts/*; do
+            gh release upload "$TAG" "$f" --repo ${{ github.repository }} --clobber
+          done
 
       - name: Log in to GHCR
         if: github.event_name == 'release'
