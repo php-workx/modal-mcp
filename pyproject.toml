@@ -5,14 +5,29 @@ build-backend = "hatchling.build"
 [project]
 name = "modal-mcp"
 version = "0.1.0"
-description = "Self-hosted Modal MCP server"
+description = "Local, read-only Modal MCP server"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
+authors = [
+  { name = "php-workx" },
+]
+keywords = ["mcp", "modal", "llm", "agent", "server"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: System :: Systems Administration",
+]
 dependencies = [
   "fastmcp>=3.2,<3.3",
   "modal>=1.4.1,<1.5",
-  "pydantic>=2.7,<2.10",
+  "pydantic>=2.7,<3.0",
   "pydantic-settings",
   "python-dotenv",
   "starlette",
@@ -40,9 +55,15 @@ dev = [
 [project.scripts]
 modal-mcp = "modal_mcp.__main__:main"
 
+[project.urls]
+Homepage = "https://github.com/php-workx/modal-mcp"
+Documentation = "https://github.com/php-workx/modal-mcp#readme"
+Repository = "https://github.com/php-workx/modal-mcp"
+Issues = "https://github.com/php-workx/modal-mcp/issues"
+Changelog = "https://github.com/php-workx/modal-mcp/blob/main/CHANGELOG.md"
+
 [tool.uv]
 managed = true
-override-dependencies = ["pydantic>=2.7,<2.10"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
@@ -52,3 +73,4 @@ markers = [
 filterwarnings = [
   "ignore:.*typing\\.Dict.*deprecated by PEP 585.*:beartype.roar.BeartypeDecorHintPep585DeprecationWarning:key_value\\.aio\\.adapters\\.pydantic\\.adapter",
 ]
+
