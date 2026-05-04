@@ -219,7 +219,7 @@ def _collect_output_known_secrets(
                         .strip()
                     )
                     _add(content)
-                except OSError:
+                except (OSError, UnicodeDecodeError):
                     pass
 
     # File-backed signing key: read and redact the file contents.
@@ -231,7 +231,7 @@ def _collect_output_known_secrets(
                     Path(key_file_str).expanduser().read_text(encoding="utf-8").strip()
                 )
                 _add(content)
-            except OSError:
+            except (OSError, UnicodeDecodeError):
                 pass
 
     return frozenset(values)

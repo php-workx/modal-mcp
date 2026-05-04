@@ -132,11 +132,15 @@ def _cmd_run(args: argparse.Namespace) -> int:
     """Start the MCP server, optionally loading an env file first."""
     env_file: str | None = getattr(args, "env_file", None)
     if env_file is not None:
-        from dotenv import load_dotenv
+        from pathlib import Path
 
-        # Load into os.environ so server.run()'s Settings() picks up the values.
-        # override=False preserves any real env vars that are already set.
-        load_dotenv(env_file, override=False)
+        env_path = Path(env_file)
+        if env_path.is_file():
+            from dotenv import load_dotenv
+
+            load_dotenv(str(env_path), override=False)
+        else:
+            print(f"warn: env file not found: {env_path}", file=sys.stderr)
 
     from modal_mcp.server import run
 

@@ -44,9 +44,10 @@ def ensure_private_dir(path: Path | str) -> Path:
     """
     p = Path(path).expanduser()
 
-    if p.is_symlink():
-        msg = f"path is a symlink and cannot be used as a private directory: {p}"
-        raise SetupFilesError(msg)
+    for ancestor in [p, *p.parents]:
+        if ancestor.exists() and ancestor.is_symlink():
+            msg = f"path contains a symlinked ancestor: {ancestor}"
+            raise SetupFilesError(msg)
 
     p.mkdir(mode=_PRIVATE_DIR_MODE, parents=True, exist_ok=True)
 
@@ -106,7 +107,7 @@ def write_secret(
         raise SetupFilesError(msg)
 
     # Preserve existing file unless the caller explicitly requests overwrite.
-    if not overwrite and p.exists():
+    if not overwrite and p.is_file():
         return p
 
     # Ensure a private parent directory exists.

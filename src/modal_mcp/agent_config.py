@@ -511,7 +511,7 @@ def install_codex_config(
 
     validation_error: Exception | None = None
     try:
-        validated = tomllib.loads(new_content)
+        validated = tomllib.loads(resolved_config.read_text(encoding="utf-8"))
         server_entry = validated.get(CODEX_TOP_LEVEL_KEY, {}).get(CODEX_SERVER_NAME)
         if server_entry is None:
             raise ValueError(
@@ -826,7 +826,7 @@ def install_claude_config(
 
     validation_error: Exception | None = None
     try:
-        validated = _json.loads(new_content)
+        validated = _json.loads(resolved_config.read_text(encoding="utf-8"))
         server_entry = validated.get(CLAUDE_TOP_LEVEL_KEY, {}).get(CLAUDE_SERVER_NAME)
         if server_entry is None:
             raise ValueError(
