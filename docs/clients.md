@@ -2,7 +2,7 @@
 
 Modal MCP can be connected to any MCP client that can launch a stdio server or
 connect to a local HTTP/SSE endpoint. The built-in installer currently supports
-Codex CLI and Claude Desktop.
+Codex CLI and Claude Desktop. Claude Code is configured manually.
 
 Run setup first:
 
@@ -21,6 +21,60 @@ token variables, verify the setup:
 ```bash
 uv run modal-mcp doctor --env-file .env
 ```
+
+## Claude Code
+
+Claude Code (the `claude` CLI) launches `modal-mcp` as a stdio subprocess.
+This is the recommended client for day-to-day use.
+
+Add the following to your Claude Code settings file
+(`~/.claude/settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "modal-mcp": {
+      "command": "modal-mcp",
+      "args": ["run", "--env-file", "/absolute/path/to/project/.env"]
+    }
+  }
+}
+```
+
+Use an absolute `.env` path. Claude Code may launch subprocesses from a different
+working directory.
+
+If `modal-mcp` is not on your PATH (for example, when running from a source
+checkout), use the absolute executable path or wrap with `uv run`:
+
+```json
+{
+  "mcpServers": {
+    "modal-mcp": {
+      "command": "/Users/runger/workspaces/modal-mcp/.venv/bin/modal-mcp",
+      "args": ["run", "--env-file", "/absolute/path/to/project/.env"]
+    }
+  }
+}
+```
+
+Or with `uv run`:
+
+```json
+{
+  "mcpServers": {
+    "modal-mcp": {
+      "command": "uv",
+      "args": [
+        "run", "--directory", "/absolute/path/to/project",
+        "modal-mcp", "run", "--env-file", "/absolute/path/to/project/.env"
+      ]
+    }
+  }
+}
+```
+
+Restart Claude Code after editing `settings.json`.
 
 ## Codex CLI
 
@@ -60,7 +114,8 @@ executable path.
 
 ## Claude Desktop
 
-Claude Desktop connects to a local server over SSE. Start the server first:
+Claude Desktop connects to a running local server over SSE. Start the server
+first:
 
 ```bash
 uv run modal-mcp run --env-file "$PWD/.env"
