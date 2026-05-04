@@ -163,9 +163,12 @@ def test_file_backed_secrets_load_into_secret_str(tmp_path: Path) -> None:
 def test_required_startup_material_fails_fast(modal_config_path: Path) -> None:
     """Missing required origins, signing keys, and token pairs are rejected."""
 
+    # Explicitly override any .env file values so the test is hermetic.
     with pytest.raises(ValidationError, match="MODAL_MCP_ALLOWED_ORIGINS"):
         Settings(
             modal_config_path=modal_config_path,
+            modal_mcp_allowed_origins=(),
+            modal_mcp_signing_key_file=None,
             modal_mcp_signing_keys=SecretStr("kid1:" + "a" * 64),
         )
 
@@ -173,6 +176,8 @@ def test_required_startup_material_fails_fast(modal_config_path: Path) -> None:
         Settings(
             modal_config_path=modal_config_path,
             modal_mcp_allowed_origins=("http://127.0.0.1:8765",),
+            modal_mcp_signing_keys=None,
+            modal_mcp_signing_key_file=None,
         )
 
     with pytest.raises(ValidationError, match="provided together"):
@@ -180,6 +185,7 @@ def test_required_startup_material_fails_fast(modal_config_path: Path) -> None:
             modal_token_id=SecretStr("tid"),
             modal_mcp_allowed_origins=("http://127.0.0.1:8765",),
             modal_mcp_signing_keys=SecretStr("kid1:" + "a" * 64),
+            modal_mcp_signing_key_file=None,
         )
 
 
