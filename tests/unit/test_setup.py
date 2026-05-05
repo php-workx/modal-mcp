@@ -364,7 +364,13 @@ class TestSymlinkRefusal:
             pytest.skip("symlink support not available on this platform")
 
     def test_refuses_symlink_at_key_path(self, tmp_path: Path) -> None:
-        self._skip_if_no_symlinks(tmp_path)
+        try:
+            target = tmp_path / "target"
+            link = tmp_path / "link"
+            target.write_text("test")
+            link.symlink_to(target)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink support not available on this platform")
         """write_secret must refuse to overwrite via a symlink."""
         secrets_dir = tmp_path / ".secrets"
         secrets_dir.mkdir(mode=0o700)
@@ -380,7 +386,13 @@ class TestSymlinkRefusal:
             )
 
     def test_key_symlink_target_untouched(self, tmp_path: Path) -> None:
-        self._skip_if_no_symlinks(tmp_path)
+        try:
+            target = tmp_path / "target"
+            link = tmp_path / "link"
+            target.write_text("test")
+            link.symlink_to(target)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink support not available on this platform")
         """The real file behind the symlink must not be modified."""
         secrets_dir = tmp_path / ".secrets"
         secrets_dir.mkdir(mode=0o700)
@@ -395,7 +407,13 @@ class TestSymlinkRefusal:
         assert real_key.read_text() == "original"
 
     def test_refuses_symlink_at_env_path(self, tmp_path: Path) -> None:
-        self._skip_if_no_symlinks(tmp_path)
+        try:
+            target = tmp_path / "target"
+            link = tmp_path / "link"
+            target.write_text("test")
+            link.symlink_to(target)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink support not available on this platform")
         """`_write_env_idempotent` must refuse to write through a symlink."""
         real_env = tmp_path / "real.env"
         real_env.write_text("ORIGINAL=yes\n")
@@ -409,7 +427,13 @@ class TestSymlinkRefusal:
             )
 
     def test_env_symlink_target_untouched(self, tmp_path: Path) -> None:
-        self._skip_if_no_symlinks(tmp_path)
+        try:
+            target = tmp_path / "target"
+            link = tmp_path / "link"
+            target.write_text("test")
+            link.symlink_to(target)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink support not available on this platform")
         """The real file behind the env symlink must not be modified."""
         real_env = tmp_path / "real.env"
         real_env.write_text("ORIGINAL=yes\n")
@@ -422,7 +446,13 @@ class TestSymlinkRefusal:
         assert real_env.read_text() == "ORIGINAL=yes\n"
 
     def test_refuses_dangling_symlink_at_key_path(self, tmp_path: Path) -> None:
-        self._skip_if_no_symlinks(tmp_path)
+        try:
+            target = tmp_path / "target"
+            link = tmp_path / "link"
+            target.write_text("test")
+            link.symlink_to(target)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink support not available on this platform")
         """A dangling symlink (target absent) must also be refused."""
         secrets_dir = tmp_path / ".secrets"
         secrets_dir.mkdir(mode=0o700)
@@ -436,7 +466,13 @@ class TestSymlinkRefusal:
             )
 
     def test_refuses_dangling_symlink_at_env_path(self, tmp_path: Path) -> None:
-        self._skip_if_no_symlinks(tmp_path)
+        try:
+            target = tmp_path / "target"
+            link = tmp_path / "link"
+            target.write_text("test")
+            link.symlink_to(target)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink support not available on this platform")
         link = tmp_path / ".env"
         link.symlink_to(tmp_path / "nowhere.env")
 
@@ -860,6 +896,13 @@ class TestSetupCLI:
     def test_setup_yes_symlink_returns_nonzero(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        try:
+            target = tmp_path / "target"
+            link = tmp_path / "link"
+            target.write_text("test")
+            link.symlink_to(target)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink support not available on this platform")
         monkeypatch.chdir(tmp_path)
         # Place a dangling symlink at the default .env location
         env_link = tmp_path / ".env"
@@ -906,6 +949,13 @@ class TestDetectModalToml:
         assert detect_modal_toml(as_dir) is False
 
     def test_returns_false_for_dangling_symlink(self, tmp_path: Path) -> None:
+        try:
+            target = tmp_path / "target"
+            link = tmp_path / "link"
+            target.write_text("test")
+            link.symlink_to(target)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink support not available on this platform")
         link = tmp_path / ".modal.toml"
         link.symlink_to(tmp_path / "nowhere")
         # is_file() returns False for dangling symlinks
@@ -1155,6 +1205,13 @@ class TestWriteServiceTokenFiles:
         assert result.token_secret_file.name == "my-token-secret.txt"
 
     def test_refuses_symlink_at_token_id_path(self, tmp_path: Path) -> None:
+        try:
+            target = tmp_path / "target"
+            link = tmp_path / "link"
+            target.write_text("test")
+            link.symlink_to(target)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink support not available on this platform")
         sd = tmp_path / ".secrets"
         sd.mkdir(mode=0o700)
         real = tmp_path / "real-id.txt"
@@ -1167,6 +1224,13 @@ class TestWriteServiceTokenFiles:
             )
 
     def test_refuses_symlink_at_token_secret_path(self, tmp_path: Path) -> None:
+        try:
+            target = tmp_path / "target"
+            link = tmp_path / "link"
+            target.write_text("test")
+            link.symlink_to(target)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink support not available on this platform")
         sd = tmp_path / ".secrets"
         sd.mkdir(mode=0o700)
         # Write the ID file normally so it doesn't fail there first.
@@ -1371,6 +1435,13 @@ class TestSetupRedaction:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Token secret must not appear in stderr even when setup exits with error."""
+        try:
+            target = tmp_path / "target"
+            link = tmp_path / "link"
+            target.write_text("test")
+            link.symlink_to(target)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink support not available on this platform")
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("MODAL_TOKEN_SECRET", "tok_sec_must_not_leak_on_setup_error")
         env_link = tmp_path / ".env"

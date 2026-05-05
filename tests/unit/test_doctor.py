@@ -257,7 +257,10 @@ class TestProbeCredentials:
 
     def test_modal_config_path_override_respected(self, tmp_path: Path) -> None:
         toml_path = tmp_path / "custom.toml"
-        toml_path.write_text("[token]\n", encoding="utf-8")
+        toml_path.write_text(
+            "[token]\nid = 'test-id'\nsecret = 'test-secret'\n",
+            encoding="utf-8",
+        )
         # Absent default path
         result = probe_credentials(
             modal_config_path=toml_path,

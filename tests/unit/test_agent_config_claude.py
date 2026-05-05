@@ -1025,13 +1025,15 @@ def test_print_agent_config_claude_startup_command_uses_absolute_env_file() -> N
         )
 
 
-def test_print_agent_config_claude_with_env_file() -> None:
+def test_print_agent_config_claude_with_env_file(
+    tmp_path: Path,
+) -> None:
     """print_agent_config(..., env_file=...) must embed the given path."""
     import io
 
     from modal_mcp.agent_config import print_agent_config
 
-    abs_env = "/home/user/project/.env"
+    abs_env = str(tmp_path / ".env")
     buf = io.StringIO()
     print_agent_config("claude", env_file=abs_env, file=buf)
     output = buf.getvalue()
@@ -1040,13 +1042,15 @@ def test_print_agent_config_claude_with_env_file() -> None:
     )
 
 
-def test_print_agent_config_claude_with_path_object_env_file() -> None:
+def test_print_agent_config_claude_with_path_object_env_file(
+    tmp_path: Path,
+) -> None:
     """print_agent_config('claude', env_file=Path(...)) must accept Path objects."""
     import io
 
     from modal_mcp.agent_config import print_agent_config
 
-    abs_env = Path("/home/user/project/.env")
+    abs_env = tmp_path / ".env"
     buf = io.StringIO()
     print_agent_config("claude", env_file=abs_env, file=buf)
     output = buf.getvalue()

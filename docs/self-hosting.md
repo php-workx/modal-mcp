@@ -131,7 +131,10 @@ uv run modal-mcp run --env-file .env
 ```
 
 Never put `MODAL_TOKEN_ID` or `MODAL_TOKEN_SECRET` values directly in `.env`.
-The setup-generated `.env` enforces this by design.
+When creating a new `.env`, `setup --yes` generates one that omits these token
+variables.  If an existing `.env` already contains them, `setup --yes` does
+not modify or remove those entries.  Manually rotate or remove any tokens found
+in an existing `.env` if you want to switch to file-backed secrets.
 
 ### MCP endpoint
 
