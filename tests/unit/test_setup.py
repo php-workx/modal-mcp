@@ -316,7 +316,19 @@ class TestIdempotency:
 
 
 class TestSymlinkRefusal:
+    @staticmethod
+    def _skip_if_no_symlinks(tmp_path: Path) -> None:
+        """Skip symlink tests on platforms that cannot create symlinks."""
+        try:
+            target = tmp_path / "target"
+            link = tmp_path / "link"
+            target.write_text("test")
+            link.symlink_to(target)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink support not available on this platform")
+
     def test_refuses_symlink_at_key_path(self, tmp_path: Path) -> None:
+        self._skip_if_no_symlinks(tmp_path)
         """write_secret must refuse to overwrite via a symlink."""
         secrets_dir = tmp_path / ".secrets"
         secrets_dir.mkdir(mode=0o700)

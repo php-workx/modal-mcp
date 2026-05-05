@@ -89,6 +89,14 @@ def _load_settings() -> Settings:
             modal_mcp_allowed_origins=(_SMOKE_ORIGIN,),
         )
     except (ConfigError, ValidationError) as exc:
+        msg = str(exc)
+        expected = (
+            "Modal credentials are required",
+            "MODAL_TOKEN_ID and MODAL_TOKEN_SECRET must be provided together",
+            "MODAL_MCP_SIGNING_KEYS",
+        )
+        if not any(token in msg for token in expected):
+            raise
         pytest.skip(
             f"Live smoke test settings could not be loaded: {exc}\n"
             "\n"
