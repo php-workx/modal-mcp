@@ -85,6 +85,12 @@ class Settings(BaseSettings):
         case_sensitive=True,
         populate_by_name=True,
         extra="ignore",
+        # Load a .env file from the process CWD if present.  pydantic-settings
+        # silently ignores a missing file, so no .env is not an error.  Real
+        # environment variables and constructor kwargs always take precedence
+        # over dotenv values (pydantic-settings priority order).
+        env_file=".env",
+        env_file_encoding="utf-8",
     )
 
     modal_token_id: SecretStr | None = Field(

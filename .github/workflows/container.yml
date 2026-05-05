@@ -66,6 +66,9 @@ jobs:
 
       - name: Publish image to GHCR
         if: startsWith(github.ref, 'refs/tags/')
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
         run: |
-          docker tag "$IMAGE_NAME:${{ github.sha }}" "$IMAGE_NAME:${{ github.ref_name }}"
-          docker push "$IMAGE_NAME:${{ github.ref_name }}"
+          docker tag "$IMAGE_NAME:$SHA" "$IMAGE_NAME:$REF_NAME"
+          docker push "$IMAGE_NAME:$REF_NAME"

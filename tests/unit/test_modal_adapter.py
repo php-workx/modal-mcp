@@ -33,6 +33,46 @@ class FakeClient:
         self.closed = True
 
 
+class FakeModalFactory:
+    """Fake Modal SDK constructor that records async calls and rejects sync use."""
+
+    def __init__(self, client: FakeClient) -> None:
+        self.client = client
+        self.aio_calls: list[tuple[Any, ...]] = []
+        self.sync_called = False
+
+    def __call__(self, *args: Any) -> FakeClient:
+        self.sync_called = True
+        msg = "sync Modal constructor should not be used from async adapter setup"
+        raise AssertionError(msg)
+
+    async def aio(self, *args: Any) -> FakeClient:
+        self.aio_calls.append(args)
+        return self.client
+
+
+class CloseHook:
+    """Callable close hook with an async Modal-style aio variant."""
+
+    def __init__(self) -> None:
+        self.sync_called = False
+        self.aio_called = False
+
+    def __call__(self) -> None:
+        self.sync_called = True
+
+    async def aio(self) -> None:
+        self.aio_called = True
+
+
+class FakeAsyncCloseClient:
+    """Fake Modal client exposing only a private close hook with aio."""
+
+    def __init__(self) -> None:
+        self.stub = FakeStub()
+        self._close = CloseHook()
+
+
 class FakeStub:
     """Fake Modal stub that records requests."""
 
@@ -110,6 +150,65 @@ async def test_create_uses_injected_client_and_aclose(modal_config_path: Path) -
     await adapter.aclose()
 
     assert client.closed is True
+
+
+@pytest.mark.asyncio
+async def test_create_uses_modal_from_env_aio(
+    modal_config_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Adapter startup uses Modal's async env constructor inside async lifespan."""
+
+    import modal
+
+    factory = FakeModalFactory(FakeClient(FakeStub()))
+    monkeypatch.setattr(modal.Client, "from_env", factory)
+
+    adapter = await ModalSdkAdapter.create(settings(modal_config_path))
+
+    assert adapter.whoami().name == "acme"
+    assert factory.aio_calls == [()]
+    assert factory.sync_called is False
+
+
+@pytest.mark.asyncio
+async def test_create_uses_modal_from_credentials_aio(
+    modal_config_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Explicit token startup uses Modal's async credential constructor."""
+
+    import modal
+
+    factory = FakeModalFactory(FakeClient(FakeStub()))
+    monkeypatch.setattr(modal.Client, "from_credentials", factory)
+    adapter_settings = settings(modal_config_path).model_copy(
+        update={
+            "modal_token_id": SecretStr("token-id"),
+            "modal_token_secret": SecretStr("token-secret"),
+        }
+    )
+
+    adapter = await ModalSdkAdapter.create(adapter_settings)
+
+    assert adapter.whoami().name == "acme"
+    assert factory.aio_calls == [("token-id", "token-secret")]
+    assert factory.sync_called is False
+
+
+@pytest.mark.asyncio
+async def test_aclose_prefers_modal_private_close_aio(
+    modal_config_path: Path,
+) -> None:
+    """Adapter shutdown uses Modal's async close hook when present."""
+
+    client = FakeAsyncCloseClient()
+    adapter = await ModalSdkAdapter.create(settings(modal_config_path), client=client)
+
+    await adapter.aclose()
+
+    assert client._close.aio_called is True
+    assert client._close.sync_called is False
 
 
 @pytest.mark.asyncio

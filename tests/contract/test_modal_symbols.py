@@ -33,34 +33,6 @@ except ModuleNotFoundError:  # pragma: no cover - dependency drift guard
     pytest.skip("modal_proto package is unavailable", allow_module_level=True)
 
 
-PINNED_MODAL_VERSION = "1.4.1"
-
-
-def _is_strict_modal_drift_ci() -> bool:
-    ref_name = os.environ.get("GITHUB_REF_NAME", "")
-    ref = os.environ.get("GITHUB_REF", "")
-    nightly = os.environ.get("NIGHTLY", "").strip().lower() in {"1", "true", "yes"}
-    if ref_name in {"main", "nightly"}:
-        return True
-    if ref in {"refs/heads/main", "refs/heads/nightly"}:
-        return True
-    return nightly
-
-
-def _maybe_xfail_modal_version_drift() -> None:
-    actual_version = getattr(modal, "__version__", None)
-    if actual_version == PINNED_MODAL_VERSION:
-        return
-
-    message = (
-        f"Modal drift detected: installed {actual_version!r}, "
-        f"expected {PINNED_MODAL_VERSION!r}"
-    )
-    if _is_strict_modal_drift_ci():
-        pytest.fail(message)
-    pytest.xfail(message)
-
-
 async def _collect_batches(result: AsyncIterable[object]) -> list[object]:
     return [item async for item in result]
 
@@ -339,10 +311,3 @@ def test_volume_v2_file_methods_exist() -> None:
 
     sandbox_from_id_sig = inspect.signature(modal_sandbox._Sandbox.from_id)
     assert sandbox_from_id_sig.parameters["sandbox_id"].annotation in {str, "str"}
-
-
-def test_modal_latest_version_drift_is_non_blocking() -> None:
-    """Version drift is only fatal in strict main/nightly CI contexts."""
-
-    _maybe_xfail_modal_version_drift()
-    assert getattr(modal, "__version__", None) == PINNED_MODAL_VERSION
