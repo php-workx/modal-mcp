@@ -6,6 +6,8 @@ set -e
 
 REPO="php-workx/modal-mcp"
 BINARY_NAME="modal-mcp"
+PACKAGE_SPEC="${MODAL_MCP_VERSION:+modal-mcp==${MODAL_MCP_VERSION}}"
+[ -n "$PACKAGE_SPEC" ] || PACKAGE_SPEC="modal-mcp"
 INSTALL_DIR="${MODAL_MCP_INSTALL_DIR:-$HOME/.local/bin}"
 
 echo "== modal-mcp installer =="
@@ -14,16 +16,16 @@ echo "== modal-mcp installer =="
 
 if command -v uv >/dev/null 2>&1; then
     INSTALLER="uv tool install"
-    echo "→ Found uv. Installing with: uv tool install modal-mcp"
+    echo "→ Found uv. Installing with: uv tool install $PACKAGE_SPEC"
 elif command -v pipx >/dev/null 2>&1; then
     INSTALLER="pipx install"
-    echo "→ Found pipx. Installing with: pipx install modal-mcp"
+    echo "→ Found pipx. Installing with: pipx install $PACKAGE_SPEC"
 else
     # Check if pip is available and can do --user
     if command -v pip3 >/dev/null 2>&1 || command -v pip >/dev/null 2>&1; then
         PIP="${PIP:-$(command -v pip3 2>/dev/null || command -v pip 2>/dev/null)}"
-        echo "→ Installing with: $PIP install --user modal-mcp"
-        $PIP install --user modal-mcp
+        echo "→ Installing with: $PIP install --user $PACKAGE_SPEC"
+        $PIP install --user "$PACKAGE_SPEC"
         INSTALLER="pip"
     else
         echo "Error: No Python installer found. Please install uv (https://docs.astral.sh/uv) or pipx first."
@@ -33,9 +35,9 @@ fi
 
 # Install via uv or pipx
 if [ "$INSTALLER" = "uv tool install" ]; then
-    uv tool install modal-mcp
+    uv tool install "$PACKAGE_SPEC"
 elif [ "$INSTALLER" = "pipx install" ]; then
-    pipx install modal-mcp
+    pipx install "$PACKAGE_SPEC"
 fi
 
 # --- Verify installation ---

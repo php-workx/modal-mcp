@@ -45,7 +45,7 @@ configured signing keys are malformed
 Fix:
 
 ```bash
-uv run modal-mcp setup --yes --force
+uv run modal-mcp setup --yes
 uv run modal-mcp doctor --env-file .env
 ```
 

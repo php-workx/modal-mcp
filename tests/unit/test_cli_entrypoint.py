@@ -311,10 +311,9 @@ def test_print_agent_config_output_contains_startup_command_with_absolute_env_fi
     for line in cmd_lines:
         match = re.search(r"--env-file\s+(\S+)", line)
         assert match, f"Could not parse --env-file path from: {line!r}"
-        env_path = match.group(1)
-        assert env_path.startswith("/"), (
-            f"env-file path in startup command must be absolute (start with '/'); "
-            f"got: {env_path!r}"
+        env_path = match.group(1).strip("\"'")
+        assert Path(env_path).is_absolute(), (
+            f"env-file path in startup command must be absolute; got: {env_path!r}"
         )
 
 
