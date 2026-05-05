@@ -27,7 +27,7 @@ import os
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
 import cbor2
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -57,6 +57,9 @@ class _TokenPayload(BaseModel):
     ws: str
     v: int = TOKEN_VERSION
     exp: int
+
+
+_T = TypeVar("_T", bound=_TokenPayload)
 
 
 class RefPayload(_TokenPayload):
@@ -216,16 +219,16 @@ def _encode_token(
     return f"{prefix}.{_encode_base64url(payload_bytes)}.{_encode_base64url(signature)}"
 
 
-def _decode_token[T: _TokenPayload](
+def _decode_token(  # noqa: UP047
     token: str,
     *,
     prefix: str,
     type_tag: str,
-    payload_type: type[T],
+    payload_type: type[_T],
     expected_env: str | None = None,
     signing_keys: Sequence[tuple[str, bytes]] | Sequence[_SigningKey] | None = None,
     now: int | None = None,
-) -> T:
+) -> _T:
     """Validate a token, its signature, and its canonical CBOR payload."""
 
     parts = token.split(".")

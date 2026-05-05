@@ -554,7 +554,7 @@ Run:
 just pre-push
 ```
 
-Expected: PASS, including Gitleaks as the local secret scanner.
+Expected: PASS, including Betterleaks as the local secret scanner.
 
 **Step 3: Check docs consistency**
 
@@ -597,7 +597,7 @@ Expected:
 
 - GitHub Actions pass.
 - Secret Scan remains TruffleHog in CI.
-- Local hooks continue to use Gitleaks.
+- Local hooks continue to use Betterleaks.
 
 ## Ticket Decomposition
 

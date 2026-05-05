@@ -141,11 +141,11 @@ class ModalSdkAdapter:
             if client_factory is not None:
                 client = _maybe_await(client_factory())
             else:
-                client = cls._create_modal_client(settings)
+                client = await cls._create_modal_client(settings)
         return cls(settings, client, client_factory=client_factory)
 
     @staticmethod
-    def _create_modal_client(settings: Settings) -> Any:
+    async def _create_modal_client(settings: Settings) -> Any:
         token_id = _secret_value(settings.modal_token_id)
         token_secret = _secret_value(settings.modal_token_secret)
         try:
@@ -154,17 +154,29 @@ class ModalSdkAdapter:
             msg = "Modal SDK is not installed"
             raise ModalAdapterError(ErrorCode.INTERNAL_DRIFT, msg) from exc
         if token_id and token_secret:
-            return modal.Client.from_credentials(token_id, token_secret)
-        return modal.Client.from_env()
+            return await modal.Client.from_credentials.aio(token_id, token_secret)
+        return await modal.Client.from_env.aio()
 
     async def aclose(self) -> None:
         """Close the underlying Modal client if it exposes a close hook."""
 
-        close = getattr(self._client, "aclose", None) or getattr(
-            self._client, "_close", None
-        )
-        if close is None:
+        public_close = getattr(self._client, "aclose", None)
+        if public_close is not None:
+            result = public_close()
+            if inspect.isawaitable(result):
+                await result
             return
+
+        private_close = getattr(self._client, "_close", None)
+        if private_close is None:
+            return
+
+        private_close_aio = getattr(private_close, "aio", None)
+        if private_close_aio is not None:
+            await private_close_aio()
+            return
+
+        close = private_close
         result = close()
         if inspect.isawaitable(result):
             await result

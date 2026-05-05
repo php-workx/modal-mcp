@@ -1,9 +1,13 @@
 .agents/
+.env
+.env.*
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
 .serena/
+.secrets/
 .tickets/
+.verk/
 .venv/
 coverage.xml
 dist/

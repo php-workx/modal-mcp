@@ -1,8 +1,8 @@
 # Self-Hosting Modal MCP
 
 This guide describes the supported v1 deployment path: a self-hosted,
-read-only Modal MCP server running FastMCP Streamable HTTP at `/mcp` via
-Docker Compose only.
+read-only Modal MCP server running FastMCP Streamable HTTP at `/mcp` on a
+local machine or a self-managed host.
 
 ## Scope
 
@@ -27,69 +27,114 @@ Unsupported v1 targets and non-goals:
 - Enabling mutating operations by default.
 - Kubernetes/Helm packaging (deferred to v2/v3 decision gate).
 
-## 15-Minute Setup
+## CLI Setup
 
-There are two credential paths. Choose the one that matches your setup.
+`modal-mcp setup` is the recommended starting point. It generates the
+non-credential server config and a signing key without touching Modal
+credentials.
 
-### Path A — existing `~/.modal.toml`
+The examples use `uv run modal-mcp` so they work from a source checkout without
+activating `.venv`. If you have installed the package into your active shell,
+`modal-mcp` can be used directly.
+
+### Step 1 — Generate local config
+
+```bash
+uv sync --extra dev
+uv run modal-mcp setup --yes
+```
+
+`setup --yes` is idempotent.  It creates `.env` and `.secrets/signing-key.txt`
+when they are missing.  If an `.env` already exists, missing `MODAL_MCP_*` keys
+are merged into it rather than overwriting the file.
+
+| File                       | Mode   | Content                                                    |
+|----------------------------|--------|------------------------------------------------------------|
+| `.env`                     | `0600` | `MODAL_MCP_SIGNING_KEY_FILE` + `MODAL_MCP_ALLOWED_ORIGINS` |
+| `.secrets/signing-key.txt` | `0600` | `kid:hex` HMAC signing key                                 |
+
+The generated `.env` intentionally omits all Modal credential variables
+(`MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, `MODAL_ENVIRONMENT`).  Credentials
+must be supplied separately unless they are already present in an existing
+`.env` file (see credential paths below).
+
+### Step 2 — Verify the installation
+
+```bash
+uv run modal-mcp doctor --env-file .env
+```
+
+`doctor` runs without loading the full server settings and reports on:
+
+1. Package imports (`modal_mcp`, `modal`, `fastmcp`, `uvicorn`)
+2. `.env` file presence
+3. Signing key (inline or file-backed)
+4. `MODAL_MCP_ALLOWED_ORIGINS` value
+5. Read-only readiness (`MODAL_MCP_READ_ONLY`)
+6. Enabled toolsets (`MODAL_MCP_ENABLED_TOOLSETS`)
+7. Modal credential source (`~/.modal.toml`, env vars, or file-backed paths)
+8. Modal SDK auth health (when credentials are present)
+9. Modal CLI availability
+
+Exit code is `0` when all checks pass; `3` when warnings exist but no check
+fails (partial-ready); `1` when at least one check fails.
+
+### Step 3 — Supply Modal credentials
+
+Choose the credential path that matches your setup.  Either path can be used
+alongside the `.env` generated in Step 1.
+
+#### Path A — existing `~/.modal.toml`
 
 If your machine already has `~/.modal.toml` (created by `modal token set` or
 `modal token new`), the server uses it automatically. No token files are
 needed.
 
-1. Install dependencies:
+> **Warning:** credentials in `~/.modal.toml` are typically personal or admin
+> tokens with broad permissions.  `modal-mcp doctor` will warn you when this
+> file is present.  For a stricter posture use Path B instead.
 
-   ```bash
-   uv sync --extra dev
-   ```
+Export the environment config and start the server:
 
-2. Generate a signing key and start the server:
+```bash
+export MODAL_MCP_ALLOWED_HOSTS=127.0.0.1,localhost
+export MODAL_ENVIRONMENT=dev
+uv run modal-mcp run --env-file .env
+```
 
-   ```bash
-   export MODAL_MCP_SIGNING_KEYS=kid1:$(openssl rand -hex 32)
-   export MODAL_MCP_ALLOWED_ORIGINS=http://127.0.0.1:8765
-   export MODAL_MCP_ALLOWED_HOSTS=127.0.0.1,localhost
-   export MODAL_ENVIRONMENT=dev
-   uv run modal-mcp
-   ```
+#### Path B — file-backed service-user token (recommended)
 
-### Path B — file-backed service-user token
+Create a dedicated Modal service-user with Viewer permissions scoped to a
+non-production workspace.  `modal-mcp setup` does **not** automatically create
+or configure a scoped service-user token; you must create the service-user and
+token yourself (Modal dashboard → Settings → Service users, or `modal token new`).
 
-For a clean machine or a dedicated Modal service-user token with Viewer
-permissions scoped to a restricted, non-production environment:
+Store the token in file-backed secrets:
 
-1. Install dependencies:
+Replace the placeholder values with a real non-production service-user token:
 
-   ```bash
-   uv sync --extra dev
-   ```
+```bash
+mkdir -p .secrets
+printf '%s' '<modal-token-id>'     > .secrets/modal-token-id
+printf '%s' '<modal-token-secret>' > .secrets/modal-token-secret
+chmod 600 .secrets/*
+```
 
-2. Create file-backed secrets with non-empty token values:
+Export the file paths and start the server:
 
-   ```bash
-   mkdir -p .secrets
-   printf '%s' '<modal-token-id>'     > .secrets/modal-token-id
-   printf '%s' '<modal-token-secret>' > .secrets/modal-token-secret
-   printf 'kid1:%s' "$(openssl rand -hex 32)" > .secrets/modal-mcp-signing-key
-   chmod 600 .secrets/*
-   ```
+```bash
+export MODAL_TOKEN_ID_FILE=$PWD/.secrets/modal-token-id
+export MODAL_TOKEN_SECRET_FILE=$PWD/.secrets/modal-token-secret
+export MODAL_MCP_ALLOWED_HOSTS=127.0.0.1,localhost
+export MODAL_ENVIRONMENT=dev
+uv run modal-mcp run --env-file .env
+```
 
-3. Export runtime configuration:
-
-   ```bash
-   export MODAL_TOKEN_ID_FILE=$PWD/.secrets/modal-token-id
-   export MODAL_TOKEN_SECRET_FILE=$PWD/.secrets/modal-token-secret
-   export MODAL_MCP_SIGNING_KEY_FILE=$PWD/.secrets/modal-mcp-signing-key
-   export MODAL_MCP_ALLOWED_ORIGINS=http://127.0.0.1:8765
-   export MODAL_MCP_ALLOWED_HOSTS=127.0.0.1,localhost
-   export MODAL_ENVIRONMENT=dev
-   ```
-
-4. Start the server:
-
-   ```bash
-   uv run modal-mcp
-   ```
+Never put `MODAL_TOKEN_ID` or `MODAL_TOKEN_SECRET` values directly in `.env`.
+When creating a new `.env`, `setup --yes` generates one that omits these token
+variables.  If an existing `.env` already contains them, `setup --yes` does
+not modify or remove those entries.  Manually rotate or remove any tokens found
+in an existing `.env` if you want to switch to file-backed secrets.
 
 ### MCP endpoint
 
@@ -107,6 +152,105 @@ After the server starts, verify the connection with these read-only tool calls:
 - `modal_whoami` — authenticated Modal user identity
 - `modal_list_environments` — Modal environments visible to the token
 - `modal_list_apps` — apps in the configured environment
+
+## Agent Integration
+
+### Printing the config snippet
+
+Print the config block for your agent client before writing any files:
+
+```bash
+# Codex CLI — stdio transport (Codex launches modal-mcp as a subprocess)
+uv run modal-mcp print-agent-config --target codex --env-file "$PWD/.env"
+
+# Claude Desktop — SSE transport (server must already be running)
+uv run modal-mcp print-agent-config --target claude --env-file "$PWD/.env"
+```
+
+### Installing into Codex CLI
+
+```bash
+# Preview the change without writing anything
+uv run modal-mcp setup --install codex --env-file "$PWD/.env" --dry-run
+
+# Write the [mcp_servers.modal-mcp] entry to ~/.codex/config.toml
+uv run modal-mcp setup --install codex --env-file "$PWD/.env" --yes
+```
+
+The install command:
+
+- Requires `--env-file` to be an absolute path (so Codex can locate the
+  settings regardless of its working directory at launch).
+- Backs up the existing `~/.codex/config.toml` with a timestamped suffix
+  before writing.
+- Writes atomically and validates the round-trip before reporting success.
+- Is idempotent: a no-op when the entry already exists with the correct
+  command and args.
+- Refuses if the config file is a symlink, is unparseable TOML, or already
+  contains a conflicting `mcp_servers.modal-mcp` entry.
+
+### Installing into Claude Desktop
+
+Claude Desktop uses SSE transport.  The server must be started separately
+before Claude connects.  Use `--install claude` to write the SSE URL entry
+automatically:
+
+```bash
+# Preview the change without writing anything
+uv run modal-mcp setup --install claude --dry-run
+
+# Write the mcpServers.modal-mcp entry to claude_desktop_config.json
+uv run modal-mcp setup --install claude --yes
+```
+
+The install command:
+
+- Does **not** require `--env-file` (Claude Desktop connects over SSE; the
+  env file is loaded by the separately-started server, not embedded in the
+  config entry).
+- Backs up the existing config with a timestamped suffix before writing.
+- Writes atomically and validates the round-trip before reporting success.
+- Is idempotent: a no-op when the entry already exists with the correct
+  type and URL.
+- Refuses if the config file is a symlink, is unparseable JSON, or already
+  contains a conflicting `mcpServers.modal-mcp` entry.
+
+macOS path: `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+### Legacy manual setup
+
+The steps below work without the `modal-mcp setup` command if you prefer
+to manage config by hand.
+
+**Manual signing key (Path A variant):**
+
+```bash
+export MODAL_MCP_SIGNING_KEYS=kid1:$(openssl rand -hex 32)
+export MODAL_MCP_ALLOWED_ORIGINS=http://127.0.0.1:8765
+export MODAL_MCP_ALLOWED_HOSTS=127.0.0.1,localhost
+export MODAL_ENVIRONMENT=dev
+uv run modal-mcp run
+```
+
+**Manual file-backed secrets (Path B variant):**
+
+Replace the placeholder values with a real non-production service-user token:
+
+```bash
+mkdir -p .secrets
+printf '%s' '<modal-token-id>'     > .secrets/modal-token-id
+printf '%s' '<modal-token-secret>' > .secrets/modal-token-secret
+printf 'kid1:%s' "$(openssl rand -hex 32)" > .secrets/modal-mcp-signing-key
+chmod 600 .secrets/*
+
+export MODAL_TOKEN_ID_FILE=$PWD/.secrets/modal-token-id
+export MODAL_TOKEN_SECRET_FILE=$PWD/.secrets/modal-token-secret
+export MODAL_MCP_SIGNING_KEY_FILE=$PWD/.secrets/modal-mcp-signing-key
+export MODAL_MCP_ALLOWED_ORIGINS=http://127.0.0.1:8765
+export MODAL_MCP_ALLOWED_HOSTS=127.0.0.1,localhost
+export MODAL_ENVIRONMENT=dev
+uv run modal-mcp run
+```
 
 ## Required Environment Variables
 

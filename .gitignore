@@ -3,6 +3,7 @@
 .verk
 .tickets
 .coverage
+.idea
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
@@ -12,6 +13,13 @@ build/
 coverage.xml
 dist/
 htmlcov/
+
+# Local setup – generated secrets and environment files (never commit)
+.env
+.env.*
+!.env.example
+!.env.sample
+.secrets/
 
 # AgentOps session artifacts (auto-added)
 .agents/
