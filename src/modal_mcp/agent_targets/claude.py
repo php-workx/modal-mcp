@@ -292,8 +292,12 @@ def format_startup_command(env_file: str | Path) -> tuple[str, ...]:
 _ENV_FILE_PLACEHOLDER: Final[str] = "/absolute/path/to/.env"
 
 
-def format_config_snippet() -> str:
+def format_config_snippet(bind: str = CLAUDE_DEFAULT_BIND) -> str:
     """Render the Claude Desktop JSON config block as a string.
+
+    Args:
+        bind: The ``host:port`` the server listens on.  Defaults to
+            ``CLAUDE_DEFAULT_BIND``.
 
     The returned string is a ready-to-paste JSON object that should be merged
     into ``claude_desktop_config.json`` under the existing top-level keys.
@@ -311,11 +315,12 @@ def format_config_snippet() -> str:
         A JSON snippet string containing the ``mcpServers`` entry with the
         ``type`` and ``url`` fields populated.
     """
+    contract = build_contract(bind=bind)
     config_block: dict[str, object] = {
         CLAUDE_TOP_LEVEL_KEY: {
             CLAUDE_SERVER_NAME: {
                 "type": CLAUDE_TRANSPORT,
-                "url": CLAUDE_SSE_URL,
+                "url": contract.server_url,
             }
         }
     }

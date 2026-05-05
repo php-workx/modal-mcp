@@ -253,7 +253,7 @@ def format_config_snippet(
         env_path_str = str(env_file_path)
 
     def _escape_toml(s: str) -> str:
-        return s.replace("\\", "\\\\").replace('"', '"')
+        return s.replace("\\", "\\\\").replace('"', '\\"')
 
     rendered_args = [
         arg.format(env_file=env_path_str) if "{env_file}" in arg else arg

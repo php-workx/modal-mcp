@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Callable, Sequence
 
@@ -160,29 +161,34 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     force: bool = getattr(args, "force", False)
 
     # ------------------------------------------------------------------
+    # Resolve env-file path for both install targets
+    # ------------------------------------------------------------------
+    from modal_mcp.setup import DEFAULT_ENV_FILE
+
+    resolved_env: Path
+    if env_file_arg is not None:
+        resolved_env = Path(env_file_arg).expanduser()
+    else:
+        resolved_env = Path(DEFAULT_ENV_FILE).expanduser().absolute()
+
+    # ------------------------------------------------------------------
     # --install codex [--dry-run] [--env-file PATH]
     # ------------------------------------------------------------------
     if install_target == "codex":
         from modal_mcp.agent_config import CodexInstallError, install_codex_config
-        from modal_mcp.setup import DEFAULT_ENV_FILE
 
-        # Resolve an absolute env-file path: explicit flag wins, otherwise
-        # fall back to the default .env location used by 'setup --yes'.
         # Codex embeds this path verbatim in its config so it MUST be
         # absolute — reject relative inputs with a clear error rather than
         # silently promoting them against the current CWD.
-        if env_file_arg is not None:
-            raw_env = Path(env_file_arg).expanduser()
-            if not raw_env.is_absolute():
-                print(
-                    f"error: --env-file must be an absolute path for"
-                    f" --install codex; got: {env_file_arg!r}",
-                    file=sys.stderr,
-                )
-                return 1
-            resolved_env = raw_env
-        else:
-            resolved_env = Path(DEFAULT_ENV_FILE).expanduser().absolute()
+        if env_file_arg is not None and not resolved_env.is_absolute():
+            print(
+                f"error: --env-file must be an absolute path for"
+                f" --install codex; got: {env_file_arg!r}",
+                file=sys.stderr,
+            )
+            return 1
+        if env_file_arg is None:
+            resolved_env = resolved_env.absolute()
 
         try:
             install_codex_config(
@@ -201,8 +207,20 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     if install_target == "claude":
         from modal_mcp.agent_config import ClaudeInstallError, install_claude_config
 
+        # Derive bind from env file or environment so the config URL matches
+        # the running server.
+        bind: str | None = None
+        if resolved_env.exists():
+            for line in resolved_env.read_text(encoding="utf-8").splitlines():
+                if line.startswith("MODAL_MCP_HTTP_BIND="):
+                    bind = line.split("=", 1)[1].strip()
+                    break
+        if bind is None:
+            bind = os.environ.get("MODAL_MCP_HTTP_BIND")
+
         try:
             install_claude_config(
+                bind=bind,
                 dry_run=dry_run,
                 yes=yes,
             )

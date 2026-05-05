@@ -45,7 +45,7 @@ def ensure_private_dir(path: Path | str) -> Path:
     p = Path(path).expanduser()
 
     for ancestor in [p, *p.parents]:
-        if ancestor.exists() and ancestor.is_symlink():
+        if ancestor.is_symlink():
             msg = f"path contains a symlinked ancestor: {ancestor}"
             raise SetupFilesError(msg)
 

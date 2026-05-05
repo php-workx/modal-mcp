@@ -292,7 +292,7 @@ def _modal_sdk_env_overrides(
         overrides["MODAL_TOKEN_ID"] = token_id
     if token_secret and "MODAL_TOKEN_SECRET" not in os.environ:
         overrides["MODAL_TOKEN_SECRET"] = token_secret
-    if modal_config_path is not None and "MODAL_CONFIG_PATH" not in os.environ:
+    if modal_config_path is not None:
         overrides["MODAL_CONFIG_PATH"] = str(modal_config_path)
 
     return overrides

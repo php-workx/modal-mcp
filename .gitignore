@@ -17,6 +17,8 @@ htmlcov/
 # Local setup – generated secrets and environment files (never commit)
 .env
 .env.*
+!.env.example
+!.env.sample
 .secrets/
 
 # AgentOps session artifacts (auto-added)

@@ -44,7 +44,9 @@ uv sync --extra dev
 uv run modal-mcp setup --yes
 ```
 
-`setup --yes` creates two files (idempotent — existing files are preserved):
+`setup --yes` is idempotent.  It creates `.env` and `.secrets/signing-key.txt`
+when they are missing.  If an `.env` already exists, missing `MODAL_MCP_*` keys
+are merged into it rather than overwriting the file.
 
 | File                       | Mode   | Content                                                    |
 |----------------------------|--------|------------------------------------------------------------|
@@ -53,7 +55,8 @@ uv run modal-mcp setup --yes
 
 The generated `.env` intentionally omits all Modal credential variables
 (`MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, `MODAL_ENVIRONMENT`).  Credentials
-must be supplied separately (see credential paths below).
+must be supplied separately unless they are already present in an existing
+`.env` file (see credential paths below).
 
 ### Step 2 — Verify the installation
 

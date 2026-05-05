@@ -397,6 +397,7 @@ def test_setup_yes_force_exits_zero(
             str(custom_secrets),
         ]
     )
+    capsys.readouterr()  # clear output from first run
     result = main(
         [
             "setup",

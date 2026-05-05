@@ -258,9 +258,10 @@ def test_format_startup_command_includes_env_file_flag(tmp_path: Path) -> None:
     assert CLAUDE_ENV_FILE_FLAG in cmd
 
 
-def test_format_startup_command_starts_with_modal_mcp() -> None:
+def test_format_startup_command_starts_with_modal_mcp(tmp_path: Path) -> None:
     """The startup command must start with 'modal-mcp'."""
-    cmd = format_startup_command("/tmp/.env")
+    env_file = tmp_path / ".env"
+    cmd = format_startup_command(str(env_file))
     assert cmd[0] == "modal-mcp"
 
 

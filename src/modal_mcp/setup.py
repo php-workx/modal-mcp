@@ -334,6 +334,9 @@ def run_setup(
     # appended so that existing user configuration is preserved.
     fresh_env = _build_env_content(key_path)
     if env_path.exists() and not force:
+        if env_path.is_symlink():
+            msg = f"refusing to write env file: target is a symlink: {env_path}"
+            raise SetupFilesError(msg)
         existing = env_path.read_text(encoding="utf-8")
         keys_to_add: list[str] = []
         for line in fresh_env.splitlines():

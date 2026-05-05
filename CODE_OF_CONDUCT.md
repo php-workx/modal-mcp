@@ -24,7 +24,7 @@ Report serious concerns privately through the project maintainers.
 
 **Reporting channels:**
 - Security issues: see [SECURITY.md](SECURITY.md)
-- Code of Conduct concerns: open a GitHub issue with the `coc` label
+- Code of Conduct concerns: open a GitHub issue; maintainers will add the `coc` label if you do not have permission
 - Direct maintainer contact: via GitHub Discussions or issues on this repository
 
 Do not include exploit details, private credentials, or personal information

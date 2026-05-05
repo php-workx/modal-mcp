@@ -6,7 +6,12 @@ set -e
 
 REPO="php-workx/modal-mcp"
 BINARY_NAME="modal-mcp"
-PACKAGE_SPEC="${MODAL_MCP_VERSION:+modal-mcp==${MODAL_MCP_VERSION}}"
+# If MODAL_MCP_VERSION is already a full package spec, use it as-is;
+# otherwise prefix it with "modal-mcp==".
+case "${MODAL_MCP_VERSION:-}" in
+  *modal-mcp*|*==*) PACKAGE_SPEC="$MODAL_MCP_VERSION" ;;
+  *) PACKAGE_SPEC="${MODAL_MCP_VERSION:+modal-mcp==${MODAL_MCP_VERSION}}" ;;
+esac
 [ -n "$PACKAGE_SPEC" ] || PACKAGE_SPEC="modal-mcp"
 INSTALL_DIR="${MODAL_MCP_INSTALL_DIR:-$HOME/.local/bin}"
 

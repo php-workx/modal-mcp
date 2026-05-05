@@ -380,6 +380,7 @@ class TestSymlinkRefusal:
             )
 
     def test_key_symlink_target_untouched(self, tmp_path: Path) -> None:
+        self._skip_if_no_symlinks(tmp_path)
         """The real file behind the symlink must not be modified."""
         secrets_dir = tmp_path / ".secrets"
         secrets_dir.mkdir(mode=0o700)
@@ -394,6 +395,7 @@ class TestSymlinkRefusal:
         assert real_key.read_text() == "original"
 
     def test_refuses_symlink_at_env_path(self, tmp_path: Path) -> None:
+        self._skip_if_no_symlinks(tmp_path)
         """`_write_env_idempotent` must refuse to write through a symlink."""
         real_env = tmp_path / "real.env"
         real_env.write_text("ORIGINAL=yes\n")
@@ -407,6 +409,7 @@ class TestSymlinkRefusal:
             )
 
     def test_env_symlink_target_untouched(self, tmp_path: Path) -> None:
+        self._skip_if_no_symlinks(tmp_path)
         """The real file behind the env symlink must not be modified."""
         real_env = tmp_path / "real.env"
         real_env.write_text("ORIGINAL=yes\n")
@@ -419,6 +422,7 @@ class TestSymlinkRefusal:
         assert real_env.read_text() == "ORIGINAL=yes\n"
 
     def test_refuses_dangling_symlink_at_key_path(self, tmp_path: Path) -> None:
+        self._skip_if_no_symlinks(tmp_path)
         """A dangling symlink (target absent) must also be refused."""
         secrets_dir = tmp_path / ".secrets"
         secrets_dir.mkdir(mode=0o700)
@@ -432,6 +436,7 @@ class TestSymlinkRefusal:
             )
 
     def test_refuses_dangling_symlink_at_env_path(self, tmp_path: Path) -> None:
+        self._skip_if_no_symlinks(tmp_path)
         link = tmp_path / ".env"
         link.symlink_to(tmp_path / "nowhere.env")
 

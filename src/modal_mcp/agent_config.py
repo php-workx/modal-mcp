@@ -476,7 +476,7 @@ def install_codex_config(
     # ------------------------------------------------------------------
 
     backup_path: Path | None = None
-    if existing_content:
+    if resolved_config.exists():
         timestamp = _timestamp if _timestamp is not None else _make_timestamp()
         backup_suffix = CODEX_BACKUP_SUFFIX_TEMPLATE.format(timestamp=timestamp)
         backup_path = resolved_config.parent / (resolved_config.name + backup_suffix)
@@ -491,7 +491,7 @@ def install_codex_config(
     # 8.  Build new content and write atomically
     # ------------------------------------------------------------------
 
-    if existing_content:
+    if resolved_config.exists():
         # Preserve existing content; append new block with a blank separator.
         trimmed = existing_content.rstrip("\n")
         new_content = trimmed + "\n\n" + snippet
@@ -792,7 +792,7 @@ def install_claude_config(
     # ------------------------------------------------------------------
 
     backup_path: Path | None = None
-    if existing_content:
+    if resolved_config.exists():
         timestamp = _timestamp if _timestamp is not None else _make_timestamp()
         backup_suffix = CLAUDE_BACKUP_SUFFIX_TEMPLATE.format(timestamp=timestamp)
         backup_path = resolved_config.parent / (resolved_config.name + backup_suffix)

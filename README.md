@@ -80,7 +80,10 @@ uv sync --extra dev
 uv run modal-mcp setup --yes
 ```
 
-`modal-mcp setup --yes` creates:
+`modal-mcp setup --yes` creates `.env` and `.secrets/signing-key.txt` when
+missing.  If an `.env` already exists, missing `MODAL_MCP_*` keys are merged
+into it; existing content (including Modal tokens and `MODAL_ENVIRONMENT`)
+is left unchanged.
 
 | File | Mode | Contains |
 | --- | --- | --- |
@@ -88,7 +91,7 @@ uv run modal-mcp setup --yes
 | `.secrets/signing-key.txt` | `0600` | HMAC signing key for server internals |
 
 The generated `.env` intentionally does not contain Modal tokens or
-`MODAL_ENVIRONMENT`.
+`MODAL_ENVIRONMENT` unless they are already present in an existing file.
 
 If this machine already has Modal CLI credentials in `~/.modal.toml`, you can
 verify and start the server immediately:

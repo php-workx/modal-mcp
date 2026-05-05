@@ -212,7 +212,7 @@ class TestProbeCredentials:
 
     def test_finds_credentials_via_modal_toml(self, tmp_path: Path) -> None:
         toml_path = tmp_path / "modal.toml"
-        toml_path.write_text("[token]\nid = 'x'\n", encoding="utf-8")
+        toml_path.write_text("[token]\nid = 'x'\nsecret = 'y'\n", encoding="utf-8")
         result = probe_credentials(modal_config_path=toml_path)
         assert result.found is True
         assert result.source == "modal_toml"
@@ -863,7 +863,7 @@ class TestRunDoctorCredentials:
 
     def test_credentials_ok_when_found_via_toml(self, tmp_path: Path) -> None:
         toml_path = tmp_path / "modal.toml"
-        toml_path.write_text("[token]\nid = 'x'\n", encoding="utf-8")
+        toml_path.write_text("[token]\nid = 'x'\nsecret = 'y'\n", encoding="utf-8")
         report = run_doctor(
             env_file=tmp_path / "absent.env", modal_config_path=toml_path
         )
