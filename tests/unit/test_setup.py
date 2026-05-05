@@ -302,12 +302,48 @@ class TestIdempotency:
         assert key_path.read_text() == original
 
     def test_preserves_preexisting_env_written_externally(self, tmp_path: Path) -> None:
-        """An .env placed before setup is called must not be overwritten."""
+        """An .env placed before setup is called must not be overwritten;
+        missing modal-mcp keys are appended."""
         env_file = tmp_path / ".env"
         env_file.write_text("CUSTOM_VAR=my_value\n")
 
-        run_setup(env_file=env_file, secrets_dir=tmp_path / ".secrets")
-        assert env_file.read_text() == "CUSTOM_VAR=my_value\n"
+        result = run_setup(env_file=env_file, secrets_dir=tmp_path / ".secrets")
+        text = env_file.read_text()
+        assert "CUSTOM_VAR=my_value" in text
+        assert "MODAL_MCP_SIGNING_KEY_FILE=" in text
+        assert "MODAL_MCP_ALLOWED_ORIGINS=" in text
+        assert result.env_created is True
+
+    def test_appends_only_missing_keys_to_existing_env(self, tmp_path: Path) -> None:
+        """Existing modal-mcp keys are preserved; only missing ones are appended."""
+        env_file = tmp_path / ".env"
+        env_file.write_text("MODAL_MCP_ALLOWED_ORIGINS=http://localhost:3000\n")
+
+        result = run_setup(env_file=env_file, secrets_dir=tmp_path / ".secrets")
+        text = env_file.read_text()
+        assert "MODAL_MCP_ALLOWED_ORIGINS=http://localhost:3000" in text
+        assert "MODAL_MCP_SIGNING_KEY_FILE=" in text
+        # Only one signing key line should exist
+        assert text.count("MODAL_MCP_SIGNING_KEY_FILE=") == 1
+        assert result.env_created is True
+
+    def test_does_not_modify_env_when_all_keys_present(self, tmp_path: Path) -> None:
+        """When all modal-mcp keys exist, the .env file is left unchanged."""
+        env_file = tmp_path / ".env"
+        env_file.write_text(
+            "CUSTOM_VAR=my_value\n"
+            "MODAL_MCP_SIGNING_KEY_FILE=/tmp/key.txt\n"
+            "MODAL_MCP_ALLOWED_ORIGINS=http://localhost:3000\n"
+        )
+
+        result = run_setup(env_file=env_file, secrets_dir=tmp_path / ".secrets")
+        text = env_file.read_text()
+        assert text == (
+            "CUSTOM_VAR=my_value\n"
+            "MODAL_MCP_SIGNING_KEY_FILE=/tmp/key.txt\n"
+            "MODAL_MCP_ALLOWED_ORIGINS=http://localhost:3000\n"
+        )
+        assert result.env_created is False
 
 
 # ---------------------------------------------------------------------------
@@ -419,11 +455,15 @@ class TestForceSemantics:
     # ------------------------------------------------------------------
 
     def test_force_false_preserves_existing_env_content(self, tmp_path: Path) -> None:
-        """Pre-existing .env must not be overwritten when force=False."""
+        """Pre-existing .env content is preserved;
+        missing modal-mcp keys are appended when force=False."""
         env_file, secrets_dir = _make_setup_paths(tmp_path)
         env_file.write_text("CUSTOM_VAR=preserved_content\n")
-        run_setup(env_file=env_file, secrets_dir=secrets_dir, force=False)
-        assert env_file.read_text() == "CUSTOM_VAR=preserved_content\n"
+        result = run_setup(env_file=env_file, secrets_dir=secrets_dir, force=False)
+        text = env_file.read_text()
+        assert "CUSTOM_VAR=preserved_content" in text
+        assert "MODAL_MCP_SIGNING_KEY_FILE=" in text
+        assert result.env_created is True
 
     def test_force_false_preserves_existing_signing_key_content(
         self, tmp_path: Path
@@ -437,14 +477,15 @@ class TestForceSemantics:
         run_setup(env_file=env_file, secrets_dir=secrets_dir, force=False)
         assert key_path.read_text() == original_key
 
-    def test_force_false_env_created_flag_false_for_existing(
+    def test_force_false_env_created_flag_true_when_keys_appended(
         self, tmp_path: Path
     ) -> None:
-        """env_created must be False when an existing file was preserved."""
+        """env_created is True when missing modal-mcp keys are appended
+        to an existing file."""
         env_file, secrets_dir = _make_setup_paths(tmp_path)
         env_file.write_text("EXISTING=1\n")
         result = run_setup(env_file=env_file, secrets_dir=secrets_dir, force=False)
-        assert result.env_created is False
+        assert result.env_created is True
 
     def test_force_false_signing_key_created_flag_false_for_existing(
         self, tmp_path: Path

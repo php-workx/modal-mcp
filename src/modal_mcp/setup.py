@@ -145,6 +145,17 @@ def _generate_signing_key_material(kid: str = _DEFAULT_KID) -> str:
     return f"{kid}:{key_bytes.hex()}"
 
 
+def _has_env_key(content: str, key: str) -> bool:
+    """Check if *key* is already assigned in dotenv *content*."""
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        if stripped.startswith(f"{key}="):
+            return True
+    return False
+
+
 def _build_env_content(signing_key_file: Path) -> str:
     """Return the content for a freshly generated ``.env`` file.
 
@@ -169,7 +180,7 @@ def _build_env_content(signing_key_file: Path) -> str:
 
 
 def _write_env_idempotent(path: Path, content: str, *, overwrite: bool = False) -> bool:
-    """Atomically write a dotenv file, preserving existing content by default.
+    """Atomically write a dotenv file.
 
     Unlike :func:`~modal_mcp.setup_files.write_secret`, this helper does
     **not** tighten parent-directory permissions, making it suitable for files
@@ -312,7 +323,6 @@ def run_setup(
     # A symlink counts as "does not exist" because write_secret (or
     # _write_env_idempotent) will raise SetupFilesError before we return.
     key_existed = key_path.exists() and not key_path.is_symlink()
-    env_existed = env_path.exists() and not env_path.is_symlink()
 
     # 1. Write signing key (atomic, private-mode).
     # When force=True an existing key is atomically replaced with a fresh one.
@@ -320,7 +330,27 @@ def run_setup(
 
     # 2. Write .env (atomic, mode 0o600, no parent chmod).
     # When force=True an existing file is atomically replaced.
-    _write_env_idempotent(env_path, _build_env_content(key_path), overwrite=force)
+    # When the file exists and force=False, missing modal-mcp keys are
+    # appended so that existing user configuration is preserved.
+    fresh_env = _build_env_content(key_path)
+    if env_path.exists() and not force:
+        existing = env_path.read_text(encoding="utf-8")
+        keys_to_add: list[str] = []
+        for line in fresh_env.splitlines():
+            if line.startswith("MODAL_MCP_"):
+                key_name = line.split("=", 1)[0]
+                if not _has_env_key(existing, key_name):
+                    keys_to_add.append(line)
+        if keys_to_add:
+            merged = existing
+            if not merged.endswith("\n"):
+                merged += "\n"
+            merged += "\n# Added by modal-mcp setup\n" + "\n".join(keys_to_add) + "\n"
+            env_written = _write_env_idempotent(env_path, merged, overwrite=True)
+        else:
+            env_written = False
+    else:
+        env_written = _write_env_idempotent(env_path, fresh_env, overwrite=force)
 
     # 3. Update .gitignore in the setup root (env_file parent directory) so
     # that .env, .env.*, and .secrets/ are excluded from version control.
@@ -338,7 +368,7 @@ def run_setup(
         # When force=True we always generate/write fresh content, so the
         # "created" flags are True regardless of pre-existing state.
         signing_key_created=not key_existed or force,
-        env_created=not env_existed or force,
+        env_created=env_written,
         gitignore_updated=gitignore_updated,
     )
 
