@@ -254,6 +254,28 @@ async def test_call_with_reconnect_retries_once(modal_config_path: Path) -> None
 
 
 @pytest.mark.asyncio
+async def test_modal_rpc_client_call_retries_once(modal_config_path: Path) -> None:
+    """ModalRpcClient.call reconnects via factory and retries exactly once."""
+    from modal_mcp.adapters.modal_adapter import ModalRpcClient
+
+    first_stub = FakeStub()
+    first_stub.fail_once = True
+    second_stub = FakeStub()
+    first_client = FakeClient(first_stub)
+    second_client = FakeClient(second_stub)
+
+    rpc = ModalRpcClient(first_client, client_factory=lambda: second_client)
+
+    # ModalRpcClient.call takes (method_name, request); request lives on rpc too
+    request = rpc.request("Empty")
+    result = rpc.call("WorkspaceNameLookup", request)
+
+    assert result["workspace_name"] == "acme"
+    assert len(first_stub.requests) == 1  # one attempt before transient failure
+    assert len(second_stub.requests) == 1  # one retry on new client
+
+
+@pytest.mark.asyncio
 async def test_call_with_reconnect_raises_retryable_without_factory(
     modal_config_path: Path,
 ) -> None:
