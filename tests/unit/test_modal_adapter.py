@@ -223,9 +223,10 @@ async def test_list_apps_threads_configured_environment(
         client=FakeClient(stub),
     )
 
-    apps = adapter.list_apps()
+    apps, warnings = adapter.list_apps()
 
     assert apps[0].name == "api"
+    assert warnings == []
     request = stub.requests[-1]
     assert getattr(request, "environment_name", None) == "prod"
 
@@ -356,3 +357,46 @@ async def test_read_volume_text_returns_only_bounded_bytes(
     )
 
     assert adapter.read_volume_text("vo-1", "/data.txt", max_bytes=3) == "abcd"
+
+
+class FakeStubWithBadApp(FakeStub):
+    """Stub returning one valid app and one malformed app (no id or created_at)."""
+
+    def AppList(self, request: Any) -> dict[str, Any]:
+        self.requests.append(request)
+        return {
+            "apps": [
+                {
+                    "app_id": "ap-1",
+                    "name": "api",
+                    "description": "API",
+                    "state": "running",
+                    "created_at": "2026-04-15T10:00:00",
+                    "n_running_tasks": 2,
+                    "environment_id": "env-1",
+                    "environment_name": "prod",
+                    "workspace_name": "acme",
+                },
+                # malformed: no app_id, no name, no created_at — _normalize_ref raises
+                {},
+            ]
+        }
+
+
+@pytest.mark.asyncio
+async def test_list_apps_returns_partial_results_with_warnings(
+    modal_config_path: Path,
+) -> None:
+    """list_apps returns valid items plus per-item failure warnings."""
+
+    adapter = await ModalSdkAdapter.create(
+        settings(modal_config_path),
+        client=FakeClient(FakeStubWithBadApp()),
+    )
+
+    apps, warnings = adapter.list_apps()
+
+    assert len(apps) == 1
+    assert apps[0].name == "api"
+    assert len(warnings) == 1
+    assert "app id is required" in warnings[0]

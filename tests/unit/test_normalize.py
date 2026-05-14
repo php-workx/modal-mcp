@@ -263,6 +263,66 @@ def test_normalize_container_volume_and_sandbox_use_public_shapes() -> None:
     assert sandbox.tags == ["ci", "nightly"]
 
 
+def test_normalize_partial_fields_do_not_raise() -> None:
+    """Normalizers return partial data instead of crashing when fields are missing."""
+
+    # workspace with no ID or name → sentinel ref (decoded id = "unknown-workspace")
+    ws = normalize_workspace({}, signing_keys=SIGNING_KEYS, now=NOW, ttl=TTL)
+    assert ws.name == ""
+    assert _decode_ref(ws.workspace_ref).id == "unknown-workspace"
+
+    # environment with no ID or name → sentinel ref
+    env = normalize_environment({}, signing_keys=SIGNING_KEYS, now=NOW, ttl=TTL)
+    assert _decode_ref(env.environment_ref).id == "unknown-environment"
+
+    # app with no created_at → created_at is None (not raised)
+    app = normalize_app(
+        {"name": "myapp", "state": "deployed", "n_running_tasks": 0},
+        signing_keys=SIGNING_KEYS,
+        now=NOW,
+        ttl=TTL,
+    )
+    assert app.created_at is None
+    assert app.name == "myapp"
+
+    # app with no environment context → placeholder environment_ref (not raised)
+    app2 = normalize_app(
+        {
+            "app_id": "app-1",
+            "name": "no-env",
+            "state": "running",
+            "n_running_tasks": 0,
+        },
+        signing_keys=SIGNING_KEYS,
+        now=NOW,
+        ttl=TTL,
+    )
+    assert _decode_ref(app2.environment_ref).id == "unknown-environment"
+
+    # container with container_id field (not task_id) → uses it
+    c = normalize_container(
+        {"container_id": "ta-abc"},
+        signing_keys=SIGNING_KEYS,
+        now=NOW,
+        ttl=TTL,
+    )
+    assert c.task_id == "ta-abc"
+
+    # container with no ID but hint_task_id provided → uses hint
+    c2 = normalize_container(
+        {},
+        hint_task_id="ta-xyz",
+        signing_keys=SIGNING_KEYS,
+        now=NOW,
+        ttl=TTL,
+    )
+    assert c2.task_id == "ta-xyz"
+
+    # container with no ID and no hint → raises
+    with pytest.raises(ValueError, match="container task_id is required"):
+        normalize_container({}, signing_keys=SIGNING_KEYS, now=NOW, ttl=TTL)
+
+
 def test_normalize_log_batch_redacts_supplied_secrets() -> None:
     """Log batches redact supplied secret strings before they leave the normalizer."""
 

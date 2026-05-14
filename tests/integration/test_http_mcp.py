@@ -56,19 +56,21 @@ class FakeAdapter:
     def list_workspaces(self) -> list[Workspace]:
         return [self.whoami()]
 
-    def list_environments(self) -> list[Environment]:
+    def list_environments(self) -> tuple[list[Environment], list[str]]:
         return [
             Environment(
                 environment_ref="mref1.env",
                 name="prod",
                 is_default=True,
             )
-        ]
+        ], []
 
     def get_environment(self, environment_name: str) -> Environment | None:
         return self.list_environments()[0] if environment_name == "prod" else None
 
-    def list_apps(self, environment_name: str | None = None) -> list[App]:
+    def list_apps(
+        self, environment_name: str | None = None
+    ) -> tuple[list[App], list[str]]:
         del environment_name
         return [
             App(
@@ -80,7 +82,7 @@ class FakeAdapter:
                 n_running_tasks=1,
                 environment_ref="mref1.env",
             )
-        ]
+        ], []
 
     def get_app(self, app_id: str, environment_name: str | None = None) -> App | None:
         del environment_name
@@ -108,7 +110,7 @@ class FakeAdapter:
         self,
         environment_name: str | None = None,
         app_id: str | None = None,
-    ) -> list[Container]:
+    ) -> tuple[list[Container], list[str]]:
         del environment_name, app_id
         return [
             Container(
@@ -116,7 +118,7 @@ class FakeAdapter:
                 task_id="ta-1",
                 state="running",
             )
-        ]
+        ], []
 
     def get_container(self, task_id: str) -> Container | None:
         return self.list_containers()[0] if task_id == "mref1.container" else None
