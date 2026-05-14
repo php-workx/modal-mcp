@@ -33,7 +33,7 @@ from modal_mcp.domain.normalize import (
     normalize_volume,
     normalize_workspace,
 )
-from modal_mcp.domain.refs import decode_ref
+from modal_mcp.domain.refs import RefCodec
 
 _T = TypeVar("_T")
 
@@ -56,15 +56,16 @@ def _secret_value(value: SecretStr | None) -> str | None:
     return value.get_secret_value()
 
 
-def _parse_signing_keys(raw: SecretStr | None) -> tuple[tuple[str, bytes], ...]:
+def _build_ref_codec(raw: SecretStr | None) -> RefCodec:
+    """Build a RefCodec from the signing-keys secret."""
     text = _secret_value(raw)
     if not text:
-        return ()
+        raise ValueError("MODAL_MCP_SIGNING_KEYS is required to build RefCodec")
     keys: list[tuple[str, bytes]] = []
     for item in text.split(","):
         kid, hex_key = item.split(":", 1)
         keys.append((kid.strip(), bytes.fromhex(hex_key.strip())))
-    return tuple(keys)
+    return RefCodec(tuple(keys))
 
 
 def _is_transient_error(exc: BaseException) -> bool:
@@ -127,7 +128,12 @@ class ModalSdkAdapter:
         self._settings = settings
         self._client = client
         self._client_factory = client_factory
-        self._signing_keys = _parse_signing_keys(settings.modal_mcp_signing_keys)
+        self._ref_codec = _build_ref_codec(settings.modal_mcp_signing_keys)
+
+    @property
+    def _signing_keys(self) -> tuple[tuple[str, bytes], ...]:
+        """Bridge: expose raw key tuples for normalizers not yet migrated."""
+        return tuple((k.kid, k.key) for k in self._ref_codec._keys)
 
     @classmethod
     async def create(
@@ -246,7 +252,7 @@ class ModalSdkAdapter:
         """Decode a public ref and enforce the requested environment."""
 
         env = expected_env or self._settings.modal_environment
-        payload = decode_ref(ref, expected_env=env, signing_keys=self._signing_keys)
+        payload = self._ref_codec.decode(ref, expected_env=env)
         return payload.id
 
     def _native_id(self, value: str, expected_env: str | None = None) -> str:
@@ -328,10 +334,9 @@ class ModalSdkAdapter:
             if app.app_ref == app_id or app.name == app_id:
                 return app
             try:
-                app_native_id = decode_ref(
+                app_native_id = self._ref_codec.decode(
                     app.app_ref,
                     expected_env=self._environment_name(environment_name),
-                    signing_keys=self._signing_keys,
                 ).id
             except ValueError:
                 continue
