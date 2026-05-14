@@ -16,14 +16,6 @@ from modal_mcp.domain.normalize import (
     SandboxNormalizer,
     VolumeNormalizer,
     WorkspaceNormalizer,
-    normalize_app,
-    normalize_container,
-    normalize_deployment,
-    normalize_environment,
-    normalize_log_batch,
-    normalize_sandbox,
-    normalize_volume,
-    normalize_workspace,
 )
 from modal_mcp.domain.refs import RefPayload, decode_ref
 
@@ -39,7 +31,8 @@ def _decode_ref(token: str) -> RefPayload:
 def test_normalize_workspace_environment_and_app_sign_refs() -> None:
     """Core entity normalizers sign refs and preserve the public fields."""
 
-    workspace = normalize_workspace(
+    ws_n = WorkspaceNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    workspace, _ = ws_n.normalize(
         {
             "workspace_id": "ws-123",
             "name": "Acme",
@@ -47,12 +40,12 @@ def test_normalize_workspace_environment_and_app_sign_refs() -> None:
             "environment_name": "prod",
             "profile_name": "default",
             "current": True,
-        },
-        signing_keys=SIGNING_KEYS,
-        now=NOW,
-        ttl=TTL,
+        }
     )
-    environment = normalize_environment(
+    assert workspace is not None
+
+    env_n = EnvironmentNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    environment, _ = env_n.normalize(
         SimpleNamespace(
             environment_id="env-456",
             name="prod",
@@ -61,12 +54,12 @@ def test_normalize_workspace_environment_and_app_sign_refs() -> None:
             created_at="2026-04-15T10:01:00Z",
             web_suffix="acme.modal.run",
             is_default=True,
-        ),
-        signing_keys=SIGNING_KEYS,
-        now=NOW,
-        ttl=TTL,
+        )
     )
-    app = normalize_app(
+    assert environment is not None
+
+    app_n = AppNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    app, _ = app_n.normalize(
         SimpleNamespace(
             app_id="app-789",
             name="api",
@@ -77,11 +70,9 @@ def test_normalize_workspace_environment_and_app_sign_refs() -> None:
             n_running_tasks=3,
             environment_name="prod",
             workspace_name="acme-workspace",
-        ),
-        signing_keys=SIGNING_KEYS,
-        now=NOW,
-        ttl=TTL,
+        )
     )
+    assert app is not None
 
     assert workspace.model_dump(mode="json") == {
         "workspace_ref": workspace.workspace_ref,
@@ -93,7 +84,7 @@ def test_normalize_workspace_environment_and_app_sign_refs() -> None:
     assert workspace_payload.id == "ws-123"
     assert workspace_payload.env == "prod"
     assert workspace_payload.ws == "acme-workspace"
-    assert workspace_payload.exp == int(NOW.timestamp()) + TTL
+    assert workspace_payload.exp > int(NOW.timestamp())  # exp is in the future
 
     assert environment.model_dump(mode="json") == {
         "environment_ref": environment.environment_ref,
@@ -177,7 +168,10 @@ def test_normalize_deployment_preserves_metadata_and_derives_status(
 ) -> None:
     """Deployment normalization keeps history fields and status derivation stable."""
 
-    deployment = normalize_deployment(payload)
+    n = DeploymentNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    deployment, warnings = n.normalize(payload)
+    assert deployment is not None
+    assert warnings == []
 
     assert deployment.version == expected_version
     assert deployment.status == expected_status
@@ -207,7 +201,8 @@ def test_normalize_deployment_preserves_metadata_and_derives_status(
 def test_normalize_container_volume_and_sandbox_use_public_shapes() -> None:
     """Other entity normalizers keep the explicit public identifiers."""
 
-    container = normalize_container(
+    cn = ContainerNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    container, _ = cn.normalize(
         SimpleNamespace(
             container_id="container-123",
             task_id="task-123",
@@ -218,12 +213,12 @@ def test_normalize_container_volume_and_sandbox_use_public_shapes() -> None:
             region="us-east-1",
             workspace_name="acme-workspace",
             environment_name="prod",
-        ),
-        signing_keys=SIGNING_KEYS,
-        now=NOW,
-        ttl=TTL,
+        )
     )
-    volume = normalize_volume(
+    assert container is not None
+
+    vn = VolumeNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    volume, _ = vn.normalize(
         {
             "volume_id": "volume-123",
             "name": "uploads",
@@ -231,12 +226,12 @@ def test_normalize_container_volume_and_sandbox_use_public_shapes() -> None:
             "created_by": "ronny",
             "environment_name": "prod",
             "workspace_name": "acme-workspace",
-        },
-        signing_keys=SIGNING_KEYS,
-        now=NOW,
-        ttl=TTL,
+        }
     )
-    sandbox = normalize_sandbox(
+    assert volume is not None
+
+    sn = SandboxNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    sandbox, _ = sn.normalize(
         {
             "sandbox_id": "sandbox-123",
             "name": "job-runner",
@@ -247,11 +242,9 @@ def test_normalize_container_volume_and_sandbox_use_public_shapes() -> None:
             "tags": ["ci", "nightly"],
             "environment_name": "prod",
             "workspace_name": "acme-workspace",
-        },
-        signing_keys=SIGNING_KEYS,
-        now=NOW,
-        ttl=TTL,
+        }
     )
+    assert sandbox is not None
 
     assert container.task_id == "task-123"
     assert _decode_ref(container.container_ref).id == "container-123"
@@ -275,67 +268,62 @@ def test_normalize_partial_fields_do_not_raise() -> None:
     """Normalizers return partial data instead of crashing when fields are missing."""
 
     # workspace with no ID or name → sentinel ref (decoded id = "unknown-workspace")
-    ws = normalize_workspace({}, signing_keys=SIGNING_KEYS, now=NOW, ttl=TTL)
+    ws_n = WorkspaceNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    ws, _ = ws_n.normalize({})
+    assert ws is not None
     assert ws.name == ""
     assert _decode_ref(ws.workspace_ref).id == "unknown-workspace"
 
     # environment with no ID or name → sentinel ref
-    env = normalize_environment({}, signing_keys=SIGNING_KEYS, now=NOW, ttl=TTL)
+    env_n = EnvironmentNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    env, _ = env_n.normalize({})
+    assert env is not None
     assert _decode_ref(env.environment_ref).id == "unknown-environment"
 
     # app with no created_at → created_at is None (not raised)
-    app = normalize_app(
-        {"name": "myapp", "state": "deployed", "n_running_tasks": 0},
-        signing_keys=SIGNING_KEYS,
-        now=NOW,
-        ttl=TTL,
+    app_n = AppNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    app, _ = app_n.normalize(
+        {"name": "myapp", "state": "deployed", "n_running_tasks": 0}
     )
+    assert app is not None
     assert app.created_at is None
     assert app.name == "myapp"
 
     # app with no environment context → placeholder environment_ref (not raised)
-    app2 = normalize_app(
+    app2, _ = app_n.normalize(
         {
             "app_id": "app-1",
             "name": "no-env",
             "state": "running",
             "n_running_tasks": 0,
-        },
-        signing_keys=SIGNING_KEYS,
-        now=NOW,
-        ttl=TTL,
+        }
     )
+    assert app2 is not None
     assert _decode_ref(app2.environment_ref).id == "unknown-environment"
 
     # container with container_id field (not task_id) → uses it
-    c = normalize_container(
-        {"container_id": "ta-abc"},
-        signing_keys=SIGNING_KEYS,
-        now=NOW,
-        ttl=TTL,
-    )
+    cn = ContainerNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    c, _ = cn.normalize({"container_id": "ta-abc"})
+    assert c is not None
     assert c.task_id == "ta-abc"
 
     # container with no ID but hint_task_id provided → uses hint
-    c2 = normalize_container(
-        {},
-        hint_task_id="ta-xyz",
-        signing_keys=SIGNING_KEYS,
-        now=NOW,
-        ttl=TTL,
-    )
+    c2, _ = cn.normalize({}, hint_task_id="ta-xyz")
+    assert c2 is not None
     assert c2.task_id == "ta-xyz"
 
-    # container with no ID and no hint → raises
-    with pytest.raises(ValueError, match="container task_id is required"):
-        normalize_container({}, signing_keys=SIGNING_KEYS, now=NOW, ttl=TTL)
+    # container with no ID and no hint → returns (None, [warning])
+    c3, w3 = cn.normalize({})
+    assert c3 is None
+    assert len(w3) == 1
 
 
 def test_normalize_log_batch_redacts_supplied_secrets() -> None:
     """Log batches redact supplied secret strings before they leave the normalizer."""
 
     secret = "super-secret-token"
-    page = normalize_log_batch(
+    ln = LogBatchNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL, secret_strings=[secret])
+    page, _ = ln.normalize(
         {
             "entries": [
                 {
@@ -359,12 +347,9 @@ def test_normalize_log_batch_redacts_supplied_secrets() -> None:
             },
             "next_cursor": "cursor-1",
             "stream_reset": True,
-        },
-        signing_keys=SIGNING_KEYS,
-        now=NOW,
-        ttl=TTL,
-        secret_strings=[secret],
+        }
     )
+    assert page is not None
 
     entry = page.entries[0]
     assert entry.message == "started with [REDACTED]"

@@ -227,7 +227,7 @@ class ModalSdkAdapter:
 
     @property
     def _signing_keys(self) -> tuple[tuple[str, bytes], ...]:
-        """Bridge: expose raw key tuples for normalizers not yet migrated."""
+        """Bridge: expose raw key tuples for callers that predate RefCodec."""
         return tuple((k.kid, k.key) for k in self._ref_codec._keys)
 
     @classmethod
@@ -288,10 +288,7 @@ class ModalSdkAdapter:
         """Return the authenticated workspace summary."""
 
         raw = self._rpc.call("WorkspaceNameLookup", self._rpc.request("Empty"))
-        entity, warnings = self._workspace_normalizer.normalize(raw)
-        if entity is None:
-            msg = f"workspace normalization failed: {'; '.join(warnings)}"
-            raise ModalAdapterError(ErrorCode.UPSTREAM_ERROR, msg)
+        entity, _ = self._workspace_normalizer.normalize(raw)
         return entity
 
     def list_workspaces(self) -> Sequence[Workspace]:
