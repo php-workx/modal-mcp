@@ -422,3 +422,27 @@ async def test_list_apps_returns_partial_results_with_warnings(
     assert apps[0].name == "api"
     assert len(warnings) == 1
     assert "app id is required" in warnings[0]
+
+
+@pytest.mark.asyncio
+async def test_adapter_normalize_calls_do_not_pass_signing_keys(
+    modal_config_path: Path,
+) -> None:
+    """After Task 8: ModalSdkAdapter no longer passes signing_keys at call sites.
+
+    All normalize_* calls are gone; the adapter delegates entirely to the
+    normalizer instances that were constructed with signing_keys in __init__.
+    """
+    import inspect
+
+    import modal_mcp.adapters.modal_adapter as mod
+
+    source = inspect.getsource(mod.ModalSdkAdapter)
+    # Strip the __init__ method body (where signing_keys IS passed to normalizer ctors)
+    # We check that no call-site in the *rest* of the class passes signing_keys=
+    init_end = source.find("def validate_auth")
+    post_init_source = source[init_end:]
+    assert "signing_keys=" not in post_init_source, (
+        "signing_keys= found outside __init__; "
+        "all signing key wiring must live in __init__, not call sites"
+    )

@@ -6,7 +6,7 @@ import importlib
 import inspect
 from collections.abc import AsyncIterator, Callable, Iterable, Mapping, Sequence
 from datetime import datetime
-from typing import Any, TypeVar
+from typing import Any
 
 from pydantic import SecretStr
 
@@ -24,18 +24,16 @@ from modal_mcp.domain.models import (
     Workspace,
 )
 from modal_mcp.domain.normalize import (
-    normalize_app,
-    normalize_container,
-    normalize_deployment,
-    normalize_environment,
-    normalize_log_batch,
-    normalize_sandbox,
-    normalize_volume,
-    normalize_workspace,
+    AppNormalizer,
+    ContainerNormalizer,
+    DeploymentNormalizer,
+    EnvironmentNormalizer,
+    LogBatchNormalizer,
+    SandboxNormalizer,
+    VolumeNormalizer,
+    WorkspaceNormalizer,
 )
 from modal_mcp.domain.refs import RefCodec
-
-_T = TypeVar("_T")
 
 ClientFactory = Callable[[], Any]
 
@@ -217,6 +215,15 @@ class ModalSdkAdapter:
         self._settings = settings
         self._rpc = rpc
         self._ref_codec = _build_ref_codec(settings.modal_mcp_signing_keys)
+        keys = self._signing_keys
+        self._workspace_normalizer = WorkspaceNormalizer(signing_keys=keys)
+        self._environment_normalizer = EnvironmentNormalizer(signing_keys=keys)
+        self._app_normalizer = AppNormalizer(signing_keys=keys)
+        self._container_normalizer = ContainerNormalizer(signing_keys=keys)
+        self._volume_normalizer = VolumeNormalizer(signing_keys=keys)
+        self._sandbox_normalizer = SandboxNormalizer(signing_keys=keys)
+        self._deployment_normalizer = DeploymentNormalizer(signing_keys=keys)
+        self._log_normalizer = LogBatchNormalizer(signing_keys=keys)
 
     @property
     def _signing_keys(self) -> tuple[tuple[str, bytes], ...]:
@@ -272,21 +279,6 @@ class ModalSdkAdapter:
             return self._verify_ref_env(value, expected_env=expected_env)
         return value
 
-    @staticmethod
-    def _normalize_safely(
-        normalize_fn: Callable[[Any], _T],
-        items: list[Any],
-    ) -> tuple[list[_T], list[str]]:
-        """Normalize items one-by-one; collect failures as warnings."""
-        results: list[_T] = []
-        warnings: list[str] = []
-        for item in items:
-            try:
-                results.append(normalize_fn(item))
-            except ValueError as exc:
-                warnings.append(str(exc))
-        return results, warnings
-
     def validate_auth(self) -> None:
         """Verify that the current client can perform a cheap workspace lookup."""
 
@@ -296,7 +288,11 @@ class ModalSdkAdapter:
         """Return the authenticated workspace summary."""
 
         raw = self._rpc.call("WorkspaceNameLookup", self._rpc.request("Empty"))
-        return normalize_workspace(raw, signing_keys=self._signing_keys)
+        entity, warnings = self._workspace_normalizer.normalize(raw)
+        if entity is None:
+            msg = f"workspace normalization failed: {'; '.join(warnings)}"
+            raise ModalAdapterError(ErrorCode.UPSTREAM_ERROR, msg)
+        return entity
 
     def list_workspaces(self) -> Sequence[Workspace]:
         """Return local/current workspace information."""
@@ -307,10 +303,13 @@ class ModalSdkAdapter:
         """Return environments visible to the authenticated workspace."""
 
         raw = self._rpc.call("EnvironmentList", self._rpc.request("Empty"))
-        return self._normalize_safely(
-            lambda item: normalize_environment(item, signing_keys=self._signing_keys),
-            _items(raw, "items", "environments"),
-        )
+        results, warnings = [], []
+        for item in _items(raw, "items", "environments"):
+            entity, w = self._environment_normalizer.normalize(item)
+            warnings.extend(w)
+            if entity is not None:
+                results.append(entity)
+        return results, warnings
 
     def get_environment(self, environment_name: str) -> Environment | None:
         """Return a single environment by name."""
@@ -329,10 +328,13 @@ class ModalSdkAdapter:
         env = self._environment_name(environment_name)
         request = self._rpc.request("AppListRequest", environment_name=env)
         raw = self._rpc.call("AppList", request)
-        return self._normalize_safely(
-            lambda item: normalize_app(item, signing_keys=self._signing_keys),
-            _items(raw, "apps", "items"),
-        )
+        results, warnings = [], []
+        for item in _items(raw, "apps", "items"):
+            entity, w = self._app_normalizer.normalize(item)
+            warnings.extend(w)
+            if entity is not None:
+                results.append(entity)
+        return results, warnings
 
     def get_app(self, app_id: str, environment_name: str | None = None) -> App | None:
         """Return a single app by public ref, id, or name."""
@@ -369,10 +371,12 @@ class ModalSdkAdapter:
         )
         request = self._rpc.request("AppDeploymentHistoryRequest", app_id=native_id)
         raw = self._rpc.call("AppDeploymentHistory", request)
-        return [
-            normalize_deployment(item, signing_keys=self._signing_keys)
-            for item in _items(raw, "app_deployment_histories", "items")
-        ]
+        results = []
+        for item in _items(raw, "app_deployment_histories", "items"):
+            entity, _ = self._deployment_normalizer.normalize(item)
+            if entity is not None:
+                results.append(entity)
+        return results
 
     def get_app_logs(
         self,
@@ -405,7 +409,11 @@ class ModalSdkAdapter:
             search_text=search_text,
         )
         raw = self._rpc.call("AppFetchLogs", request)
-        return normalize_log_batch(raw, signing_keys=self._signing_keys)
+        entity, _ = self._log_normalizer.normalize(raw)
+        if entity is None:
+            msg = "log batch normalization failed unexpectedly"
+            raise ModalAdapterError(ErrorCode.UPSTREAM_ERROR, msg)
+        return entity
 
     async def tail_app_logs(
         self,
@@ -449,10 +457,13 @@ class ModalSdkAdapter:
             app_id=native_app_id,
         )
         raw = self._rpc.call("TaskList", request)
-        return self._normalize_safely(
-            lambda item: normalize_container(item, signing_keys=self._signing_keys),
-            _items(raw, "tasks", "items"),
-        )
+        results, warnings = [], []
+        for item in _items(raw, "tasks", "items"):
+            entity, w = self._container_normalizer.normalize(item)
+            warnings.extend(w)
+            if entity is not None:
+                results.append(entity)
+        return results, warnings
 
     def get_container(self, task_id: str) -> Container | None:
         """Return a single container by task id."""
@@ -464,11 +475,10 @@ class ModalSdkAdapter:
         target = items[0] if items else raw
         if not target:
             return None
-        return normalize_container(
-            target,
-            hint_task_id=native_task_id,
-            signing_keys=self._signing_keys,
+        entity, _ = self._container_normalizer.normalize(
+            target, hint_task_id=native_task_id
         )
+        return entity
 
     def get_container_logs(
         self,
@@ -507,10 +517,12 @@ class ModalSdkAdapter:
         env = self._environment_name(environment_name)
         request = self._rpc.request("VolumeListRequest", environment_name=env)
         raw = self._rpc.call("VolumeList", request)
-        return [
-            normalize_volume(item, signing_keys=self._signing_keys)
-            for item in _items(raw, "items", "volumes")
-        ]
+        results = []
+        for item in _items(raw, "items", "volumes"):
+            entity, _ = self._volume_normalizer.normalize(item)
+            if entity is not None:
+                results.append(entity)
+        return results
 
     def ls_volume(
         self,
@@ -590,10 +602,12 @@ class ModalSdkAdapter:
             include_finished=include_finished,
         )
         raw = self._rpc.call("SandboxList", request)
-        return [
-            normalize_sandbox(item, signing_keys=self._signing_keys)
-            for item in _items(raw, "sandboxes", "items")
-        ]
+        results = []
+        for item in _items(raw, "sandboxes", "items"):
+            entity, _ = self._sandbox_normalizer.normalize(item)
+            if entity is not None:
+                results.append(entity)
+        return results
 
     def get_sandbox(self, sandbox_id: str) -> SandboxSummary | None:
         """Return a single sandbox by id."""
@@ -603,7 +617,8 @@ class ModalSdkAdapter:
             sandbox_id=self._native_id(sandbox_id),
         )
         raw = self._rpc.call("SandboxWait", request)
-        return normalize_sandbox(raw, signing_keys=self._signing_keys)
+        entity, _ = self._sandbox_normalizer.normalize(raw)
+        return entity
 
     def get_sandbox_stdio(self, sandbox_id: str) -> tuple[str, str]:
         """Return buffered stdout/stderr text for a sandbox."""
