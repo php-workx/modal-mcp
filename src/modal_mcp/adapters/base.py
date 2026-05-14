@@ -33,13 +33,15 @@ class ModalAdapter(Protocol):
     def list_workspaces(self) -> Sequence[Workspace]:
         """Return every workspace visible to the current credentials."""
 
-    def list_environments(self) -> Sequence[Environment]:
+    def list_environments(self) -> tuple[Sequence[Environment], list[str]]:
         """Return the environments visible in the current workspace."""
 
     def get_environment(self, environment_name: str) -> Environment | None:
         """Return a single environment by name when it exists."""
 
-    def list_apps(self, environment_name: str | None = None) -> Sequence[App]:
+    def list_apps(
+        self, environment_name: str | None = None
+    ) -> tuple[Sequence[App], list[str]]:
         """Return the apps visible in an environment."""
 
     def get_app(self, app_id: str, environment_name: str | None = None) -> App | None:
@@ -86,7 +88,7 @@ class ModalAdapter(Protocol):
         self,
         environment_name: str | None = None,
         app_id: str | None = None,
-    ) -> Sequence[Container]:
+    ) -> tuple[Sequence[Container], list[str]]:
         """Return the containers visible for an environment or app."""
 
     def get_container(self, task_id: str) -> Container | None:

@@ -14,6 +14,7 @@ from modal_mcp.toolsets._common import (
     envelope,
     not_found,
     page_envelope,
+    page_envelope_partial,
 )
 
 
@@ -26,7 +27,8 @@ def register_app_tools(mcp: FastMCP[Any]) -> None:
         annotations=READ_ONLY_ANNOTATIONS,
     )
     def modal_list_apps(environment_name: str | None = None) -> ToolEnvelope[Page[App]]:
-        return page_envelope(get_modal_adapter().list_apps(environment_name))
+        items, warnings = get_modal_adapter().list_apps(environment_name)
+        return page_envelope_partial(items, warnings)
 
     @mcp.tool(
         name="modal_get_app",

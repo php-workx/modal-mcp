@@ -58,7 +58,7 @@ class App(_DomainModel):
     name: str
     description: str
     state: str
-    created_at: datetime
+    created_at: datetime | None = None
     stopped_at: datetime | None = None
     n_running_tasks: int
     environment_ref: Ref

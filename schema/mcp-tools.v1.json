@@ -538,8 +538,16 @@
                 "type": "string"
               },
               "created_at": {
-                "format": "date-time",
-                "type": "string"
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               },
               "description": {
                 "type": "string"
@@ -571,7 +579,6 @@
             },
             "required": [
               "app_ref",
-              "created_at",
               "description",
               "environment_ref",
               "n_running_tasks",
@@ -1347,12 +1354,12 @@
       "parameters": {
         "additionalProperties": false,
         "properties": {
-          "container_ref": {
+          "task_id": {
             "type": "string"
           }
         },
         "required": [
-          "container_ref"
+          "task_id"
         ],
         "type": "object"
       },
@@ -1655,9 +1662,6 @@
       "parameters": {
         "additionalProperties": false,
         "properties": {
-          "container_ref": {
-            "type": "string"
-          },
           "function_call_id": {
             "anyOf": [
               {
@@ -1736,6 +1740,9 @@
             ],
             "default": null
           },
+          "task_id": {
+            "type": "string"
+          },
           "until": {
             "anyOf": [
               {
@@ -1750,7 +1757,7 @@
           }
         },
         "required": [
-          "container_ref"
+          "task_id"
         ],
         "type": "object"
       },
@@ -2701,8 +2708,16 @@
                 "type": "string"
               },
               "created_at": {
-                "format": "date-time",
-                "type": "string"
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               },
               "description": {
                 "type": "string"
@@ -2734,7 +2749,6 @@
             },
             "required": [
               "app_ref",
-              "created_at",
               "description",
               "environment_ref",
               "n_running_tasks",

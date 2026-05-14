@@ -32,6 +32,19 @@ def page_envelope[T: BaseModel](items: Sequence[T]) -> ToolEnvelope[Page[T]]:
     )
 
 
+def page_envelope_partial[T: BaseModel](
+    items: Sequence[T],
+    warnings: Sequence[str],
+) -> ToolEnvelope[Page[T]]:
+    """Wrap a partial sequence with normalization warnings in a success envelope."""
+
+    return ok(
+        Page[T](items=list(items), truncated=False),
+        request_id=REQUEST_ID,
+        warnings=list(warnings),
+    )
+
+
 def not_found(message: str) -> ToolEnvelope[Any]:
     """Return a normalized not-found tool error."""
 
@@ -62,4 +75,5 @@ __all__ = [
     "envelope",
     "not_found",
     "page_envelope",
+    "page_envelope_partial",
 ]
