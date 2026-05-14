@@ -7,9 +7,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fastmcp import FastMCP
 from fastmcp.server.middleware import MiddlewareContext
 from fastmcp.tools.base import ToolResult
 from mcp import types as mt
+from mcp.types import ToolAnnotations
 from pydantic import SecretStr
 from starlette.requests import Request
 
@@ -31,9 +33,56 @@ from modal_mcp.policy.rules import (
     PolicyCode,
     evaluate,
 )
+from modal_mcp.toolsets._common import MUTATING_ANNOTATIONS, READ_ONLY_ANNOTATIONS
 
 _SIGNING_KEYS = "kid1:" + "a" * 64
 _SIGNING_KEY_BYTES = bytes.fromhex("a" * 64)
+
+
+@pytest.fixture
+def annotation_mcp() -> FastMCP[Any]:
+    mcp: FastMCP[Any] = FastMCP(name="test-classify")
+
+    @mcp.tool(name="test_read", tags={"apps"}, annotations=READ_ONLY_ANNOTATIONS)
+    def test_read() -> str:
+        return "ok"
+
+    @mcp.tool(
+        name="test_write",
+        tags={"change"},
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+    )
+    def test_write() -> str:
+        return "ok"
+
+    @mcp.tool(name="test_dangerous", tags={"expert"}, annotations=MUTATING_ANNOTATIONS)
+    def test_dangerous() -> str:
+        return "ok"
+
+    @mcp.tool(name="test_no_annotations", tags={"discovery"})
+    def test_no_annotations() -> str:
+        return "ok"
+
+    return mcp
+
+
+@pytest.fixture
+def middleware_mcp() -> FastMCP[Any]:
+    mcp: FastMCP[Any] = FastMCP(name="test-middleware")
+
+    @mcp.tool(
+        name="modal_stop_app",
+        tags={"change"},
+        annotations=MUTATING_ANNOTATIONS,
+    )
+    def modal_stop_app(
+        app_ref: str,
+        dry_run: bool = True,
+        approval_token: str | None = None,
+    ) -> str:
+        return "disabled"
+
+    return mcp
 
 
 @pytest.fixture
@@ -236,6 +285,82 @@ def test_initialize_without_identity_is_remote_address_capped() -> None:
         rate_limit_key(method="initialize", remote_address="203.0.113.10")
         == "remote:203.0.113.10"
     )
+
+
+@pytest.mark.asyncio
+async def test_classify_tool_read_only_annotation(
+    annotation_mcp: FastMCP[Any],
+    policy_settings: Settings,
+) -> None:
+    """classify_tool returns non-mutating for tools with readOnlyHint=True."""
+
+    middleware = PolicyMiddleware(
+        annotation_mcp,
+        policy_settings,
+        actor_resolver=lambda _: ApprovalActor("alice", "auth-1"),
+    )
+    tool_policy = await middleware.classify_tool("test_read")
+
+    assert tool_policy.tool_name == "test_read"
+    assert tool_policy.toolset == "apps"
+    assert tool_policy.mutating is False
+
+
+@pytest.mark.asyncio
+async def test_classify_tool_non_destructive_write(
+    annotation_mcp: FastMCP[Any],
+    policy_settings: Settings,
+) -> None:
+    """classify_tool returns non-mutating when destructiveHint is False."""
+
+    middleware = PolicyMiddleware(
+        annotation_mcp,
+        policy_settings,
+        actor_resolver=lambda _: ApprovalActor("alice", "auth-1"),
+    )
+    tool_policy = await middleware.classify_tool("test_write")
+
+    assert tool_policy.tool_name == "test_write"
+    assert tool_policy.toolset == "change"
+    assert tool_policy.mutating is False
+
+
+@pytest.mark.asyncio
+async def test_classify_tool_destructive_annotation(
+    annotation_mcp: FastMCP[Any],
+    policy_settings: Settings,
+) -> None:
+    """classify_tool returns mutating for tools with destructiveHint=True."""
+
+    middleware = PolicyMiddleware(
+        annotation_mcp,
+        policy_settings,
+        actor_resolver=lambda _: ApprovalActor("alice", "auth-1"),
+    )
+    tool_policy = await middleware.classify_tool("test_dangerous")
+
+    assert tool_policy.tool_name == "test_dangerous"
+    assert tool_policy.toolset == "expert"
+    assert tool_policy.mutating is True
+
+
+@pytest.mark.asyncio
+async def test_classify_tool_no_annotations_uses_fallback(
+    annotation_mcp: FastMCP[Any],
+    policy_settings: Settings,
+) -> None:
+    """classify_tool falls back to non-mutating for tools without annotations."""
+
+    middleware = PolicyMiddleware(
+        annotation_mcp,
+        policy_settings,
+        actor_resolver=lambda _: ApprovalActor("alice", "auth-1"),
+    )
+    tool_policy = await middleware.classify_tool("test_no_annotations")
+
+    assert tool_policy.tool_name == "test_no_annotations"
+    assert tool_policy.toolset == "discovery"
+    assert tool_policy.mutating is False
 
 
 def test_token_bucket_rate_limiter_consumes_and_refills() -> None:
