@@ -591,6 +591,7 @@ async def test_approve_http_request_rejects_invalid_approval_context(
 async def test_policy_middleware_consumes_approval_strips_token_and_redacts(
     monkeypatch: pytest.MonkeyPatch,
     policy_settings: Settings,
+    middleware_mcp: FastMCP[Any],
 ) -> None:
     """Middleware enforces approval before call_next and redacts output."""
 
@@ -601,6 +602,7 @@ async def test_policy_middleware_consumes_approval_strips_token_and_redacts(
     ledger = ApprovalTokenLedger(now=lambda: 1_006)
     await ledger.approve(token, payload, actor)
     middleware = PolicyMiddleware(
+        middleware_mcp,
         policy_settings,
         approval_ledger=ledger,
         actor_resolver=lambda _: actor,
@@ -645,11 +647,13 @@ async def test_policy_middleware_consumes_approval_strips_token_and_redacts(
 @pytest.mark.asyncio
 async def test_policy_middleware_forwards_normalized_dry_run(
     policy_settings: Settings,
+    middleware_mcp: FastMCP[Any],
 ) -> None:
     """Mutating calls without dry_run are forwarded as explicit dry runs."""
 
     actor = ApprovalActor("alice", "auth-1")
     middleware = PolicyMiddleware(
+        middleware_mcp,
         policy_settings,
         approval_ledger=ApprovalTokenLedger(now=lambda: 1_006),
         actor_resolver=lambda _: actor,
@@ -679,6 +683,7 @@ async def test_policy_middleware_forwards_normalized_dry_run(
 async def test_policy_middleware_consumes_approval_after_signing_env_scrub(
     monkeypatch: pytest.MonkeyPatch,
     policy_settings: Settings,
+    middleware_mcp: FastMCP[Any],
 ) -> None:
     """Approval consumption must use Settings keys, not scrubbed env vars."""
 
@@ -689,6 +694,7 @@ async def test_policy_middleware_consumes_approval_after_signing_env_scrub(
     ledger = ApprovalTokenLedger(now=lambda: 1_006)
     await ledger.approve(token, payload, actor)
     middleware = PolicyMiddleware(
+        middleware_mcp,
         policy_settings,
         approval_ledger=ledger,
         actor_resolver=lambda _: actor,
@@ -722,6 +728,7 @@ async def test_policy_middleware_consumes_approval_after_signing_env_scrub(
 async def test_policy_middleware_blocks_unapproved_mutation(
     monkeypatch: pytest.MonkeyPatch,
     policy_settings: Settings,
+    middleware_mcp: FastMCP[Any],
 ) -> None:
     """Mutating dry_run=false calls require prior out-of-band approval."""
 
@@ -730,6 +737,7 @@ async def test_policy_middleware_blocks_unapproved_mutation(
     token = encode_approval(payload)
     actor = ApprovalActor("alice", "auth-1")
     middleware = PolicyMiddleware(
+        middleware_mcp,
         policy_settings,
         approval_ledger=ApprovalTokenLedger(now=lambda: 1_006),
         actor_resolver=lambda _: actor,

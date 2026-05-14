@@ -393,6 +393,7 @@ def create_mcp(
     mcp.add_middleware(OtelMiddleware(resolved_settings))
     mcp.add_middleware(
         PolicyMiddleware(
+            mcp,
             resolved_settings,
             approval_ledger=approval_ledger,
             audit_sink=resolved_audit_sink,
