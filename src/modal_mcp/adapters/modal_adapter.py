@@ -6,7 +6,7 @@ import importlib
 import inspect
 from collections.abc import AsyncIterator, Callable, Iterable, Mapping, Sequence
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeVar
 
 from pydantic import SecretStr
 
@@ -34,6 +34,8 @@ from modal_mcp.domain.normalize import (
     normalize_workspace,
 )
 from modal_mcp.domain.refs import decode_ref
+
+_T = TypeVar("_T")
 
 ClientFactory = Callable[[], Any]
 
@@ -252,6 +254,21 @@ class ModalSdkAdapter:
             return self._verify_ref_env(value, expected_env=expected_env)
         return value
 
+    @staticmethod
+    def _normalize_safely(
+        normalize_fn: Callable[[Any], _T],
+        items: list[Any],
+    ) -> tuple[list[_T], list[str]]:
+        """Normalize items one-by-one; collect failures as warnings."""
+        results: list[_T] = []
+        warnings: list[str] = []
+        for item in items:
+            try:
+                results.append(normalize_fn(item))
+            except ValueError as exc:
+                warnings.append(str(exc))
+        return results, warnings
+
     def validate_auth(self) -> None:
         """Verify that the current client can perform a cheap workspace lookup."""
 
@@ -268,33 +285,36 @@ class ModalSdkAdapter:
 
         return [self.whoami()]
 
-    def list_environments(self) -> Sequence[Environment]:
+    def list_environments(self) -> tuple[Sequence[Environment], list[str]]:
         """Return environments visible to the authenticated workspace."""
 
         raw = self._call_with_reconnect("EnvironmentList", self._request("Empty"))
-        return [
-            normalize_environment(item, signing_keys=self._signing_keys)
-            for item in _items(raw, "items", "environments")
-        ]
+        return self._normalize_safely(
+            lambda item: normalize_environment(item, signing_keys=self._signing_keys),
+            _items(raw, "items", "environments"),
+        )
 
     def get_environment(self, environment_name: str) -> Environment | None:
         """Return a single environment by name."""
 
-        for environment in self.list_environments():
+        environments, _ = self.list_environments()
+        for environment in environments:
             if environment.name == environment_name:
                 return environment
         return None
 
-    def list_apps(self, environment_name: str | None = None) -> Sequence[App]:
+    def list_apps(
+        self, environment_name: str | None = None
+    ) -> tuple[Sequence[App], list[str]]:
         """Return apps visible in an environment."""
 
         env = self._environment_name(environment_name)
         request = self._request("AppListRequest", environment_name=env)
         raw = self._call_with_reconnect("AppList", request)
-        return [
-            normalize_app(item, signing_keys=self._signing_keys)
-            for item in _items(raw, "apps", "items")
-        ]
+        return self._normalize_safely(
+            lambda item: normalize_app(item, signing_keys=self._signing_keys),
+            _items(raw, "apps", "items"),
+        )
 
     def get_app(self, app_id: str, environment_name: str | None = None) -> App | None:
         """Return a single app by public ref, id, or name."""
@@ -303,7 +323,8 @@ class ModalSdkAdapter:
             app_id,
             expected_env=self._environment_name(environment_name),
         )
-        for app in self.list_apps(environment_name):
+        apps, _ = self.list_apps(environment_name)
+        for app in apps:
             if app.app_ref == app_id or app.name == app_id:
                 return app
             try:
@@ -400,7 +421,7 @@ class ModalSdkAdapter:
         self,
         environment_name: str | None = None,
         app_id: str | None = None,
-    ) -> Sequence[Container]:
+    ) -> tuple[Sequence[Container], list[str]]:
         """Return containers for an environment or app."""
 
         env = self._environment_name(environment_name)
@@ -411,20 +432,27 @@ class ModalSdkAdapter:
             app_id=native_app_id,
         )
         raw = self._call_with_reconnect("TaskList", request)
-        return [
-            normalize_container(item, signing_keys=self._signing_keys)
-            for item in _items(raw, "tasks", "items")
-        ]
+        return self._normalize_safely(
+            lambda item: normalize_container(item, signing_keys=self._signing_keys),
+            _items(raw, "tasks", "items"),
+        )
 
     def get_container(self, task_id: str) -> Container | None:
         """Return a single container by task id."""
 
-        request = self._request("TaskGetInfoRequest", task_id=self._native_id(task_id))
+        native_task_id = self._native_id(task_id)
+        request = self._request("TaskGetInfoRequest", task_id=native_task_id)
         raw = self._call_with_reconnect("TaskGetInfo", request)
         items = _items(raw, "tasks", "items")
-        if not items:
-            return normalize_container(raw, signing_keys=self._signing_keys)
-        return normalize_container(items[0], signing_keys=self._signing_keys)
+        target = items[0] if items else raw
+        try:
+            return normalize_container(
+                target,
+                hint_task_id=native_task_id,
+                signing_keys=self._signing_keys,
+            )
+        except ValueError:
+            return None
 
     def get_container_logs(
         self,
