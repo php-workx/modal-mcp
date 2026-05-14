@@ -139,6 +139,10 @@ semgrep:
 build:
     uv build
 
+# Build and install modal-mcp globally as a uv tool.
+install:
+    uv tool install --reinstall .
+
 # --- Setup ---
 
 # Install/sync development dependencies.
