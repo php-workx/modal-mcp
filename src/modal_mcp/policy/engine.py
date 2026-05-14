@@ -159,8 +159,10 @@ class PolicyMiddleware(Middleware):
 
         tool = await self._mcp.get_tool(tool_name)
         if tool is None:
-            mutating = tool_name in MUTATING_TOOLS
-            toolset = "change" if mutating else "discovery"
+            # Tool not in registry — fail closed: treat as mutating so the
+            # approval gate fires. MUTATING_TOOLS provides the toolset label.
+            mutating = True
+            toolset = "change" if tool_name in MUTATING_TOOLS else "discovery"
             return ToolPolicy(tool_name=tool_name, toolset=toolset, mutating=mutating)
         toolset = next(iter(sorted(tool.tags)), "discovery")
         annotations = tool.annotations

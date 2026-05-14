@@ -33,7 +33,7 @@ from modal_mcp.domain.normalize import (
     VolumeNormalizer,
     WorkspaceNormalizer,
 )
-from modal_mcp.domain.refs import RefCodec
+from modal_mcp.domain.refs import RefCodec, parse_signing_keys
 
 ClientFactory = Callable[[], Any]
 
@@ -59,11 +59,7 @@ def _build_ref_codec(raw: SecretStr | None) -> RefCodec:
     text = _secret_value(raw)
     if not text:
         raise ValueError("MODAL_MCP_SIGNING_KEYS is required to build RefCodec")
-    keys: list[tuple[str, bytes]] = []
-    for item in text.split(","):
-        kid, hex_key = item.split(":", 1)
-        keys.append((kid.strip(), bytes.fromhex(hex_key.strip())))
-    return RefCodec(tuple(keys))
+    return RefCodec(parse_signing_keys(text))
 
 
 def _is_transient_error(exc: BaseException) -> bool:
@@ -228,7 +224,7 @@ class ModalSdkAdapter:
     @property
     def _signing_keys(self) -> tuple[tuple[str, bytes], ...]:
         """Bridge: expose raw key tuples for callers that predate RefCodec."""
-        return tuple((k.kid, k.key) for k in self._ref_codec._keys)
+        return self._ref_codec.signing_key_pairs()
 
     @classmethod
     async def create(

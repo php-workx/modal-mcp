@@ -380,9 +380,9 @@ async def test_classify_tool_unknown_tool_uses_mutating_tools_fallback(
     assert policy.mutating is True
     assert policy.toolset == "change"
 
-    # completely unknown tool → non-mutating discovery default
+    # completely unknown tool → fail-closed: mutating=True so approval gate fires
     policy = await middleware.classify_tool("modal_completely_unknown")
-    assert policy.mutating is False
+    assert policy.mutating is True
     assert policy.toolset == "discovery"
 
 

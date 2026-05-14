@@ -360,6 +360,10 @@ class RefCodec:
             now=now,
         )
 
+    def signing_key_pairs(self) -> tuple[tuple[str, bytes], ...]:
+        """Return raw (kid, key_bytes) pairs for callers that predate RefCodec."""
+        return tuple((k.kid, k.key) for k in self._keys)
+
 
 def encode_cursor(
     payload: CursorPayload,
