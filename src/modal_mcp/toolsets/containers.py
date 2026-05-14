@@ -9,41 +9,34 @@ from fastmcp import FastMCP
 
 from modal_mcp.adapters.registry import get_modal_adapter
 from modal_mcp.domain.envelope import ToolEnvelope, ok
-from modal_mcp.domain.models import Container, LogsPage, Page
+from modal_mcp.domain.models import LogsPage
 from modal_mcp.toolsets._common import (
     READ_ONLY_ANNOTATIONS,
     REQUEST_ID,
-    envelope,
-    not_found,
-    page_envelope_partial,
+    register_read_toolset,
 )
 
 
 def register_container_tools(mcp: FastMCP[Any]) -> None:
-    """Register container tools with read-only annotations."""
+    """Register container tools with read-only annotations.
 
-    @mcp.tool(
-        name="modal_list_containers",
+    list/get are handled by register_read_toolset.
+    modal_get_container_logs keeps custom registration: unique time-range
+    params, source/filter params, and an empty-log hint that references the
+    task_id in a formatted warning message.
+    """
+    register_read_toolset(
+        mcp=mcp,
+        entity_name="container",
+        list_fn=lambda environment_name=None, app_ref=None: (
+            get_modal_adapter().list_containers(environment_name, app_ref)
+        ),
+        get_fn=lambda task_id: get_modal_adapter().get_container(task_id),
+        get_param_name="task_id",
+        not_found_message_template="container not found: {ref}",
         tags={"containers"},
-        annotations=READ_ONLY_ANNOTATIONS,
+        extra_list_params=["app_ref"],
     )
-    def modal_list_containers(
-        environment_name: str | None = None,
-        app_ref: str | None = None,
-    ) -> ToolEnvelope[Page[Container]]:
-        items, warnings = get_modal_adapter().list_containers(environment_name, app_ref)
-        return page_envelope_partial(items, warnings)
-
-    @mcp.tool(
-        name="modal_get_container",
-        tags={"containers"},
-        annotations=READ_ONLY_ANNOTATIONS,
-    )
-    def modal_get_container(task_id: str) -> ToolEnvelope[Container]:
-        container = get_modal_adapter().get_container(task_id)
-        if container is None:
-            return not_found(f"container not found: {task_id}")
-        return envelope(container)
 
     @mcp.tool(
         name="modal_get_container_logs",

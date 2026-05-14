@@ -27,7 +27,20 @@ class SandboxStdio(BaseModel):
 
 
 def register_sandbox_tools(mcp: FastMCP[Any]) -> None:
-    """Register sandbox tools with read-only annotations."""
+    """Register sandbox tools with read-only annotations.
+
+    modal_list_sandboxes: custom registration — list tool takes a bool param
+    (include_finished) which is outside the str|None contract of
+    register_read_toolset.  Extending the factory for bool params is deferred
+    to a follow-up ticket.
+
+    modal_get_sandbox: custom registration — factory cannot be called for the
+    get tool in isolation without registering a duplicate list tool; kept
+    custom to avoid complexity.
+
+    modal_get_sandbox_stdio: custom registration — bounded-buffer truncation
+    logic unique to this tool.
+    """
 
     @mcp.tool(
         name="modal_list_sandboxes",
