@@ -430,7 +430,7 @@ def test_app_normalizer_returns_entity() -> None:
 
 
 def test_app_normalizer_returns_none_when_app_id_missing() -> None:
-    """AppNormalizer returns (None, [warning]) when app_id is missing (required=True)."""
+    """AppNormalizer returns (None, [warning]) when app_id is missing."""
     n = AppNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
     entity, warnings = n.normalize({})
     assert entity is None
@@ -562,7 +562,11 @@ def test_log_batch_normalizer_redacts_secret_strings() -> None:
     entity, warnings = n.normalize(
         {
             "entries": [
-                {"ts": "2026-04-15T10:08:00Z", "source": "app", "message": f"hi {secret}"}
+                {
+                    "ts": "2026-04-15T10:08:00Z",
+                    "source": "app",
+                    "message": f"hi {secret}",
+                }
             ],
         }
     )
