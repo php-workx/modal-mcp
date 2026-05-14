@@ -8,6 +8,14 @@ from types import SimpleNamespace
 import pytest
 
 from modal_mcp.domain.normalize import (
+    AppNormalizer,
+    ContainerNormalizer,
+    DeploymentNormalizer,
+    EnvironmentNormalizer,
+    LogBatchNormalizer,
+    SandboxNormalizer,
+    VolumeNormalizer,
+    WorkspaceNormalizer,
     normalize_app,
     normalize_container,
     normalize_deployment,
@@ -372,3 +380,212 @@ def test_normalize_log_batch_redacts_supplied_secrets() -> None:
     assert page.next_cursor == "cursor-1"
     assert page.stream_reset is True
     assert secret not in page.model_dump_json()
+
+
+# ---------------------------------------------------------------------------
+# Normalizer class tests
+# ---------------------------------------------------------------------------
+
+
+def test_workspace_normalizer_returns_entity_and_no_warnings() -> None:
+    n = WorkspaceNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize({"workspace_id": "ws-1", "name": "Acme"})
+    assert entity is not None
+    assert entity.name == "Acme"
+    assert warnings == []
+
+
+def test_workspace_normalizer_never_returns_none_on_empty_input() -> None:
+    """WorkspaceNormalizer required=False: empty raw yields a sentinel entity."""
+    n = WorkspaceNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize({})
+    assert entity is not None
+    assert warnings == []
+
+
+def test_environment_normalizer_returns_entity_and_no_warnings() -> None:
+    n = EnvironmentNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize({"environment_id": "env-1", "name": "prod"})
+    assert entity is not None
+    assert entity.name == "prod"
+    assert warnings == []
+
+
+def test_environment_normalizer_never_returns_none_on_empty_input() -> None:
+    """EnvironmentNormalizer required=False: empty raw yields a sentinel entity."""
+    n = EnvironmentNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize({})
+    assert entity is not None
+    assert warnings == []
+
+
+def test_app_normalizer_returns_entity() -> None:
+    n = AppNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize(
+        {"app_id": "app-1", "name": "myapp", "state": "running"}
+    )
+    assert entity is not None
+    assert entity.name == "myapp"
+    assert warnings == []
+
+
+def test_app_normalizer_returns_none_when_app_id_missing() -> None:
+    """AppNormalizer returns (None, [warning]) when app_id is missing (required=True)."""
+    n = AppNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize({})
+    assert entity is None
+    assert len(warnings) == 1
+
+
+def test_container_normalizer_returns_entity() -> None:
+    n = ContainerNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize({"task_id": "task-1", "state": "running"})
+    assert entity is not None
+    assert entity.task_id == "task-1"
+    assert warnings == []
+
+
+def test_container_normalizer_hint_task_id() -> None:
+    n = ContainerNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize({}, hint_task_id="task-hint")
+    assert entity is not None
+    assert entity.task_id == "task-hint"
+    assert warnings == []
+
+
+def test_container_normalizer_returns_none_without_task_id() -> None:
+    n = ContainerNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize({})
+    assert entity is None
+    assert len(warnings) == 1
+
+
+def test_volume_normalizer_returns_entity() -> None:
+    n = VolumeNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize(
+        {
+            "volume_id": "vol-1",
+            "name": "uploads",
+            "created_at": "2026-04-15T10:06:00Z",
+            "environment_name": "prod",
+        }
+    )
+    assert entity is not None
+    assert entity.name == "uploads"
+    assert warnings == []
+
+
+def test_volume_normalizer_returns_none_when_name_missing() -> None:
+    n = VolumeNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize({"created_at": "2026-04-15T10:06:00Z"})
+    assert entity is None
+    assert len(warnings) == 1
+
+
+def test_volume_normalizer_returns_none_when_created_at_missing() -> None:
+    n = VolumeNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize({"name": "uploads"})
+    assert entity is None
+    assert len(warnings) == 1
+
+
+def test_sandbox_normalizer_returns_entity() -> None:
+    n = SandboxNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize(
+        {"sandbox_id": "sb-1", "created_at": "2026-04-15T10:07:00Z"}
+    )
+    assert entity is not None
+    assert entity.sandbox_id == "sb-1"
+    assert warnings == []
+
+
+def test_sandbox_normalizer_returns_none_when_sandbox_id_missing() -> None:
+    n = SandboxNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize({"created_at": "2026-04-15T10:07:00Z"})
+    assert entity is None
+    assert len(warnings) == 1
+
+
+def test_sandbox_normalizer_returns_none_when_created_at_missing() -> None:
+    n = SandboxNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize({"sandbox_id": "sb-1"})
+    assert entity is None
+    assert len(warnings) == 1
+
+
+def test_deployment_normalizer_returns_entity() -> None:
+    n = DeploymentNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize(
+        {
+            "version": 1,
+            "deployed_at": "2026-04-15T10:03:00Z",
+            "client_version": "1.4.1",
+            "deployed_by": "ronny",
+        }
+    )
+    assert entity is not None
+    assert entity.version == 1
+    assert warnings == []
+
+
+def test_deployment_normalizer_returns_none_on_missing_required_fields() -> None:
+    n = DeploymentNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize({})
+    assert entity is None
+    assert len(warnings) == 1
+
+
+def test_log_batch_normalizer_returns_entity() -> None:
+    n = LogBatchNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL)
+    entity, warnings = n.normalize(
+        {
+            "entries": [],
+            "summary": {
+                "total_entries": 0,
+                "error_signatures": [],
+                "top_sources": [],
+                "truncated": False,
+                "deduped_count": 0,
+            },
+        }
+    )
+    assert entity is not None
+    assert entity.entries == []
+    assert warnings == []
+
+
+def test_log_batch_normalizer_redacts_secret_strings() -> None:
+    secret = "tok-abc"
+    n = LogBatchNormalizer(
+        signing_keys=SIGNING_KEYS, ttl=TTL, secret_strings=[secret]
+    )
+    entity, warnings = n.normalize(
+        {
+            "entries": [
+                {"ts": "2026-04-15T10:08:00Z", "source": "app", "message": f"hi {secret}"}
+            ],
+        }
+    )
+    assert entity is not None
+    assert secret not in entity.model_dump_json()
+    assert warnings == []
+
+
+def test_legacy_normalize_functions_not_in_all() -> None:
+    """After Task 9: legacy normalize_* names are removed from __all__."""
+    import modal_mcp.domain.normalize as mod
+
+    public_api = set(mod.__all__)
+    legacy_names = {
+        "normalize_app",
+        "normalize_container",
+        "normalize_deployment",
+        "normalize_environment",
+        "normalize_log_batch",
+        "normalize_sandbox",
+        "normalize_volume",
+        "normalize_workspace",
+    }
+    assert not (public_api & legacy_names), (
+        f"Legacy function names still in __all__: {public_api & legacy_names}"
+    )

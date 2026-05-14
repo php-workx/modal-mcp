@@ -337,6 +337,21 @@ def normalize_workspace(
     )
 
 
+class WorkspaceNormalizer:
+    def __init__(self, signing_keys=None, ttl: int = 3600) -> None:
+        self._signing_keys = signing_keys
+        self._ttl = ttl
+
+    def normalize(self, raw: Any) -> tuple[Workspace | None, list[str]]:
+        try:
+            entity = normalize_workspace(
+                raw, signing_keys=self._signing_keys, ttl=self._ttl
+            )
+            return entity, []
+        except Exception as exc:
+            return None, [str(exc)]
+
+
 def normalize_environment(
     raw: Any,
     *,
@@ -371,6 +386,21 @@ def normalize_environment(
         web_suffix=_normalize_str(_first(raw, "web_suffix", "web_domain"), default="")
         or None,
     )
+
+
+class EnvironmentNormalizer:
+    def __init__(self, signing_keys=None, ttl: int = 3600) -> None:
+        self._signing_keys = signing_keys
+        self._ttl = ttl
+
+    def normalize(self, raw: Any) -> tuple[Environment | None, list[str]]:
+        try:
+            entity = normalize_environment(
+                raw, signing_keys=self._signing_keys, ttl=self._ttl
+            )
+            return entity, []
+        except Exception as exc:
+            return None, [str(exc)]
 
 
 def normalize_app(
@@ -436,6 +466,21 @@ def normalize_app(
     )
 
 
+class AppNormalizer:
+    def __init__(self, signing_keys=None, ttl: int = 3600) -> None:
+        self._signing_keys = signing_keys
+        self._ttl = ttl
+
+    def normalize(self, raw: Any) -> tuple[App | None, list[str]]:
+        try:
+            entity = normalize_app(
+                raw, signing_keys=self._signing_keys, ttl=self._ttl
+            )
+            return entity, []
+        except Exception as exc:
+            return None, [str(exc)]
+
+
 def normalize_deployment(
     raw: Any,
     *,
@@ -495,6 +540,21 @@ def normalize_deployment(
         image_digest=_normalize_str(_first(raw, "image_digest", "digest"), default="")
         or None,
     )
+
+
+class DeploymentNormalizer:
+    def __init__(self, signing_keys=None, ttl: int = 3600) -> None:
+        self._signing_keys = signing_keys
+        self._ttl = ttl
+
+    def normalize(self, raw: Any) -> tuple[Deployment | None, list[str]]:
+        try:
+            entity = normalize_deployment(
+                raw, signing_keys=self._signing_keys, ttl=self._ttl
+            )
+            return entity, []
+        except Exception as exc:
+            return None, [str(exc)]
 
 
 def normalize_container(
@@ -574,6 +634,26 @@ def normalize_container(
     )
 
 
+class ContainerNormalizer:
+    def __init__(self, signing_keys=None, ttl: int = 3600) -> None:
+        self._signing_keys = signing_keys
+        self._ttl = ttl
+
+    def normalize(
+        self, raw: Any, *, hint_task_id: str | None = None
+    ) -> tuple[Container | None, list[str]]:
+        try:
+            entity = normalize_container(
+                raw,
+                hint_task_id=hint_task_id,
+                signing_keys=self._signing_keys,
+                ttl=self._ttl,
+            )
+            return entity, []
+        except Exception as exc:
+            return None, [str(exc)]
+
+
 def normalize_volume(
     raw: Any,
     *,
@@ -622,6 +702,21 @@ def normalize_volume(
             ttl=ttl,
         ),
     )
+
+
+class VolumeNormalizer:
+    def __init__(self, signing_keys=None, ttl: int = 3600) -> None:
+        self._signing_keys = signing_keys
+        self._ttl = ttl
+
+    def normalize(self, raw: Any) -> tuple[VolumeSummary | None, list[str]]:
+        try:
+            entity = normalize_volume(
+                raw, signing_keys=self._signing_keys, ttl=self._ttl
+            )
+            return entity, []
+        except Exception as exc:
+            return None, [str(exc)]
 
 
 def normalize_sandbox(
@@ -682,6 +777,21 @@ def normalize_sandbox(
         else None,
         tags=tags,
     )
+
+
+class SandboxNormalizer:
+    def __init__(self, signing_keys=None, ttl: int = 3600) -> None:
+        self._signing_keys = signing_keys
+        self._ttl = ttl
+
+    def normalize(self, raw: Any) -> tuple[SandboxSummary | None, list[str]]:
+        try:
+            entity = normalize_sandbox(
+                raw, signing_keys=self._signing_keys, ttl=self._ttl
+            )
+            return entity, []
+        except Exception as exc:
+            return None, [str(exc)]
 
 
 def _normalize_log_entry(
@@ -845,7 +955,33 @@ def normalize_log_batch(
     )
 
 
+class LogBatchNormalizer:
+    def __init__(self, signing_keys=None, ttl: int = 3600, secret_strings=None) -> None:
+        self._signing_keys = signing_keys
+        self._ttl = ttl
+        self._secret_strings = secret_strings
+
+    def normalize(self, raw: Any) -> tuple[LogsPage | None, list[str]]:
+        try:
+            return normalize_log_batch(
+                raw,
+                signing_keys=self._signing_keys,
+                ttl=self._ttl,
+                secret_strings=self._secret_strings,
+            ), []
+        except Exception as exc:
+            return None, [str(exc)]
+
+
 __all__ = [
+    "AppNormalizer",
+    "ContainerNormalizer",
+    "DeploymentNormalizer",
+    "EnvironmentNormalizer",
+    "LogBatchNormalizer",
+    "SandboxNormalizer",
+    "VolumeNormalizer",
+    "WorkspaceNormalizer",
     "normalize_app",
     "normalize_container",
     "normalize_deployment",
