@@ -66,7 +66,8 @@ class FakeAdapter:
         ], []
 
     def get_environment(self, environment_name: str) -> Environment | None:
-        return self.list_environments()[0] if environment_name == "prod" else None
+        items, _ = self.list_environments()
+        return items[0] if environment_name == "prod" else None
 
     def list_apps(
         self, environment_name: str | None = None
@@ -86,7 +87,8 @@ class FakeAdapter:
 
     def get_app(self, app_id: str, environment_name: str | None = None) -> App | None:
         del environment_name
-        return self.list_apps()[0] if app_id == "mref1.app" else None
+        items, _ = self.list_apps()
+        return items[0] if app_id == "mref1.app" else None
 
     def list_app_deployments(
         self, app_id: str, environment_name: str | None = None
@@ -121,7 +123,8 @@ class FakeAdapter:
         ], []
 
     def get_container(self, task_id: str) -> Container | None:
-        return self.list_containers()[0] if task_id == "mref1.container" else None
+        items, _ = self.list_containers()
+        return next((item for item in items if item.task_id == task_id), None)
 
     def get_container_logs(self, task_id: str, **_: object) -> LogsPage:
         del task_id

@@ -445,14 +445,13 @@ class ModalSdkAdapter:
         raw = self._call_with_reconnect("TaskGetInfo", request)
         items = _items(raw, "tasks", "items")
         target = items[0] if items else raw
-        try:
-            return normalize_container(
-                target,
-                hint_task_id=native_task_id,
-                signing_keys=self._signing_keys,
-            )
-        except ValueError:
+        if not target:
             return None
+        return normalize_container(
+            target,
+            hint_task_id=native_task_id,
+            signing_keys=self._signing_keys,
+        )
 
     def get_container_logs(
         self,
