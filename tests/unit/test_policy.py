@@ -363,6 +363,29 @@ async def test_classify_tool_no_annotations_uses_fallback(
     assert tool_policy.mutating is False
 
 
+@pytest.mark.asyncio
+async def test_classify_tool_unknown_tool_uses_mutating_tools_fallback(
+    annotation_mcp: FastMCP[Any],
+    policy_settings: Settings,
+) -> None:
+    """classify_tool falls back to MUTATING_TOOLS for tools not in the registry."""
+
+    middleware = PolicyMiddleware(
+        annotation_mcp,
+        policy_settings,
+        actor_resolver=lambda _: ApprovalActor("alice", "auth-1"),
+    )
+    # modal_stop_app is in MUTATING_TOOLS but not registered in annotation_mcp
+    policy = await middleware.classify_tool("modal_stop_app")
+    assert policy.mutating is True
+    assert policy.toolset == "change"
+
+    # completely unknown tool → non-mutating discovery default
+    policy = await middleware.classify_tool("modal_completely_unknown")
+    assert policy.mutating is False
+    assert policy.toolset == "discovery"
+
+
 def test_token_bucket_rate_limiter_consumes_and_refills() -> None:
     """Token buckets consume capacity and refill over deterministic time."""
 
