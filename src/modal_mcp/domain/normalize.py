@@ -132,6 +132,7 @@ def _normalize_ref(
     kind: str,
     id_names: Sequence[str],
     entity_name: str | None = None,
+    required: bool = True,
     signing_keys: Sequence[tuple[str, bytes]] | Sequence[Any] | None = None,
     now: datetime | int | None = None,
     ttl: int = 3600,
@@ -146,8 +147,11 @@ def _normalize_ref(
     if not raw_id and entity_name is not None:
         raw_id = entity_name
     if not raw_id:
-        msg = f"{kind} id is required"
-        raise ValueError(msg)
+        if not required:
+            raw_id = f"unknown-{kind}"
+        else:
+            msg = f"{kind} id is required"
+            raise ValueError(msg)
     environment_name, workspace_name = _normalize_context(raw, entity_name=entity_name)
     payload = RefPayload(
         id=raw_id,
@@ -320,6 +324,7 @@ def normalize_workspace(
             kind="workspace",
             id_names=("workspace_id", "id", "workspace_ref"),
             entity_name=entity_name or None,
+            required=False,
             signing_keys=signing_keys,
             now=now,
             ttl=ttl,
@@ -351,6 +356,7 @@ def normalize_environment(
             kind="environment",
             id_names=("environment_id", "id", "environment_ref"),
             entity_name=entity_name or None,
+            required=False,
             signing_keys=signing_keys,
             now=now,
             ttl=ttl,
@@ -383,9 +389,6 @@ def normalize_app(
     created_at = _normalize_datetime(
         _first(raw, "created_at", "created", "created_timestamp")
     )
-    if created_at is None:
-        msg = "app created_at is required"
-        raise ValueError(msg)
     return App(
         app_ref=_normalize_ref(
             raw,
@@ -425,6 +428,7 @@ def normalize_app(
                 _first(raw, "environment_name", "env_name"), default=""
             )
             or None,
+            required=False,
             signing_keys=signing_keys,
             now=now,
             ttl=ttl,
@@ -496,6 +500,7 @@ def normalize_deployment(
 def normalize_container(
     raw: Any,
     *,
+    hint_task_id: str | None = None,
     signing_keys: Sequence[tuple[str, bytes]] | Sequence[Any] | None = None,
     now: datetime | int | None = None,
     ttl: int = 3600,
@@ -505,7 +510,20 @@ def normalize_container(
     if isinstance(raw, Container):
         return raw
 
-    task_id = _normalize_str(_first(raw, "task_id", "taskId", "id"), default="")
+    task_id = _normalize_str(
+        _first(
+            raw,
+            "task_id",
+            "taskId",
+            "container_task_id",
+            "container_id",
+            "tid",
+            "id",
+        ),
+        default="",
+    )
+    if not task_id:
+        task_id = hint_task_id or ""
     if not task_id:
         msg = "container task_id is required"
         raise ValueError(msg)
@@ -514,10 +532,11 @@ def normalize_container(
             raw,
             kind="container",
             id_names=("container_id", "id", "container_ref"),
-            entity_name=_normalize_str(
-                _first(raw, "name", "container_name"), default=""
-            )
-            or None,
+            entity_name=(
+                _normalize_str(_first(raw, "name", "container_name"), default="")
+                or task_id
+                or None
+            ),
             signing_keys=signing_keys,
             now=now,
             ttl=ttl,
