@@ -188,12 +188,14 @@ def _build_list_fn_one_extra(
     """
     fn_src = (
         f"def _list_tool(environment_name: str | None = None,"
-        f" {extra_param}: str | None = None):\n"
+        f" {extra_param}: str | None = None) -> ToolEnvelope[Any]:\n"
         f"    items, warnings = list_fn(environment_name,"
         f" **{{{extra_param!r}: {extra_param}}})\n"
         f"    return page_envelope_partial(items, warnings)\n"
     )
     ns: dict[str, Any] = {
+        "Any": Any,
+        "ToolEnvelope": ToolEnvelope,
         "list_fn": list_fn,
         "page_envelope_partial": page_envelope_partial,
     }
@@ -212,13 +214,15 @@ def _build_get_fn(
 ) -> None:
     """Register the get tool with a dynamically-named ref parameter."""
     fn_src = f"""
-def _get_tool({get_param_name}: str):
+def _get_tool({get_param_name}: str) -> ToolEnvelope[Any]:
     result = get_fn({get_param_name})
     if result is None:
         return not_found(not_found_message_template.format(ref={get_param_name}))
     return envelope(result)
 """
     ns: dict[str, Any] = {
+        "Any": Any,
+        "ToolEnvelope": ToolEnvelope,
         "get_fn": get_fn,
         "not_found": not_found,
         "envelope": envelope,

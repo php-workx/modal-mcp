@@ -11,12 +11,13 @@ from pydantic import BaseModel, ConfigDict
 from modal_mcp.adapters.registry import get_modal_adapter
 from modal_mcp.config import AuthMode, Settings
 from modal_mcp.domain.envelope import ToolEnvelope
-from modal_mcp.domain.models import Page, Workspace
+from modal_mcp.domain.models import Environment, Page, Workspace
 from modal_mcp.toolsets._common import (
     READ_ONLY_ANNOTATIONS,
     envelope,
+    not_found,
     page_envelope,
-    register_read_toolset,
+    page_envelope_partial,
 )
 
 
@@ -35,11 +36,9 @@ class ServerInfo(BaseModel):
 def register_discovery_tools(mcp: FastMCP[Any], settings: Settings) -> None:
     """Register discovery tools with read-only annotations.
 
-    modal_list_environments / modal_get_environment use register_read_toolset.
-
-    modal_discovery_server_info, modal_whoami, modal_list_workspaces keep
-    custom registration: they have no environment_name param and do not follow
-    the list/get pattern.
+    All tools use custom registration: modal_list_environments takes no
+    environment_name param (environments are global), and modal_discovery_server_info,
+    modal_whoami, and modal_list_workspaces also don't follow the list/get pattern.
     """
 
     @mcp.tool(
@@ -73,17 +72,25 @@ def register_discovery_tools(mcp: FastMCP[Any], settings: Settings) -> None:
     def modal_list_workspaces() -> ToolEnvelope[Page[Workspace]]:
         return page_envelope(get_modal_adapter().list_workspaces())
 
-    register_read_toolset(
-        mcp=mcp,
-        entity_name="environment",
-        list_fn=lambda environment_name=None: get_modal_adapter().list_environments(),
-        get_fn=lambda environment_name: get_modal_adapter().get_environment(
-            environment_name
-        ),
-        get_param_name="environment_name",
-        not_found_message_template="environment not found: {ref}",
+    @mcp.tool(
+        name="modal_list_environments",
         tags={"discovery"},
+        annotations=READ_ONLY_ANNOTATIONS,
     )
+    def modal_list_environments() -> ToolEnvelope[Page[Environment]]:
+        items, warnings = get_modal_adapter().list_environments()
+        return page_envelope_partial(items, warnings)
+
+    @mcp.tool(
+        name="modal_get_environment",
+        tags={"discovery"},
+        annotations=READ_ONLY_ANNOTATIONS,
+    )
+    def modal_get_environment(environment_name: str) -> ToolEnvelope[Environment]:
+        env = get_modal_adapter().get_environment(environment_name)
+        if env is None:
+            return not_found(f"environment not found: {environment_name}")
+        return envelope(env)
 
 
 def _package_version() -> str:

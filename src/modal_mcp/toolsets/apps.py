@@ -8,32 +8,49 @@ from fastmcp import FastMCP
 
 from modal_mcp.adapters.registry import get_modal_adapter
 from modal_mcp.domain.envelope import ToolEnvelope
-from modal_mcp.domain.models import Deployment, Page
+from modal_mcp.domain.models import App, Deployment, Page
 from modal_mcp.toolsets._common import (
     READ_ONLY_ANNOTATIONS,
+    envelope,
+    not_found,
     page_envelope,
-    register_read_toolset,
+    page_envelope_partial,
 )
 
 
 def register_app_tools(mcp: FastMCP[Any]) -> None:
     """Register app tools with read-only annotations.
 
-    list/get are handled by register_read_toolset.
-    modal_list_app_deployments keeps custom registration: it takes app_ref as
-    a required positional string, not the standard optional ref pattern.
+    All tools use custom registration so that modal_get_app retains its
+    environment_name parameter (the factory's get_fn only accepts a single ref).
+    modal_list_app_deployments takes app_ref as a required positional string,
+    not the standard optional ref pattern.
     """
-    register_read_toolset(
-        mcp=mcp,
-        entity_name="app",
-        list_fn=lambda environment_name=None: get_modal_adapter().list_apps(
-            environment_name
-        ),
-        get_fn=lambda app_ref: get_modal_adapter().get_app(app_ref),
-        get_param_name="app_ref",
-        not_found_message_template="app not found: {ref}",
+
+    @mcp.tool(
+        name="modal_list_apps",
         tags={"apps"},
+        annotations=READ_ONLY_ANNOTATIONS,
     )
+    def modal_list_apps(
+        environment_name: str | None = None,
+    ) -> ToolEnvelope[Page[App]]:
+        items, warnings = get_modal_adapter().list_apps(environment_name)
+        return page_envelope_partial(items, warnings)
+
+    @mcp.tool(
+        name="modal_get_app",
+        tags={"apps"},
+        annotations=READ_ONLY_ANNOTATIONS,
+    )
+    def modal_get_app(
+        app_ref: str,
+        environment_name: str | None = None,
+    ) -> ToolEnvelope[App]:
+        app = get_modal_adapter().get_app(app_ref, environment_name)
+        if app is None:
+            return not_found(f"app not found: {app_ref}")
+        return envelope(app)
 
     @mcp.tool(
         name="modal_list_app_deployments",
