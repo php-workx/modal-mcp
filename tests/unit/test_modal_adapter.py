@@ -276,6 +276,31 @@ async def test_modal_rpc_client_call_retries_once(modal_config_path: Path) -> No
 
 
 @pytest.mark.asyncio
+async def test_modal_rpc_client_call_raises_after_two_failures(
+    modal_config_path: Path,
+) -> None:
+    """ModalRpcClient.call raises ModalAdapterError when retry after reconnect fails."""
+    from modal_mcp.adapters.modal_adapter import ModalRpcClient
+
+    first_stub = FakeStub()
+    first_stub.fail_once = True
+    second_stub = FakeStub()
+    second_stub.fail_once = True
+    first_client = FakeClient(first_stub)
+    second_client = FakeClient(second_stub)
+
+    rpc = ModalRpcClient(first_client, client_factory=lambda: second_client)
+    request = rpc.request("Empty")
+
+    with pytest.raises(ModalAdapterError) as exc_info:
+        rpc.call("WorkspaceNameLookup", request)
+
+    assert exc_info.value.code == "UPSTREAM_ERROR"
+    assert exc_info.value.retryable is True
+    assert "after reconnect" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
 async def test_call_with_reconnect_raises_retryable_without_factory(
     modal_config_path: Path,
 ) -> None:

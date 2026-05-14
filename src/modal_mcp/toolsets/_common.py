@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import keyword
+import re
 from collections.abc import Callable, Sequence
 from typing import Any, TypeVar
 
@@ -12,6 +14,14 @@ from pydantic import BaseModel
 from modal_mcp.domain.envelope import ToolEnvelope, error_result, ok
 from modal_mcp.domain.errors import ErrorCode, ModalAdapterError
 from modal_mcp.domain.models import Page
+
+_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _assert_valid_param_name(name: str) -> None:
+    if not _IDENT_RE.match(name) or keyword.iskeyword(name):
+        raise ValueError(f"Invalid Python identifier for exec(): {name!r}")
+
 
 READ_ONLY_ANNOTATIONS = ToolAnnotations(readOnlyHint=True, idempotentHint=True)
 MUTATING_ANNOTATIONS = ToolAnnotations(readOnlyHint=False, destructiveHint=True)
@@ -186,6 +196,7 @@ def _build_list_fn_one_extra(
     Uses exec so FastMCP's inspection sees a function with the real parameter
     name (not **kwargs), which is required for correct schema generation.
     """
+    _assert_valid_param_name(extra_param)
     fn_src = (
         f"def _list_tool(environment_name: str | None = None,"
         f" {extra_param}: str | None = None) -> ToolEnvelope[Any]:\n"
@@ -213,6 +224,7 @@ def _build_get_fn(
     not_found_message_template: str,
 ) -> None:
     """Register the get tool with a dynamically-named ref parameter."""
+    _assert_valid_param_name(get_param_name)
     fn_src = f"""
 def _get_tool({get_param_name}: str) -> ToolEnvelope[Any]:
     result = get_fn({get_param_name})
