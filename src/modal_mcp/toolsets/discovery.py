@@ -17,6 +17,7 @@ from modal_mcp.toolsets._common import (
     envelope,
     not_found,
     page_envelope,
+    page_envelope_partial,
 )
 
 
@@ -72,7 +73,8 @@ def register_discovery_tools(mcp: FastMCP[Any], settings: Settings) -> None:
         annotations=READ_ONLY_ANNOTATIONS,
     )
     def modal_list_environments() -> ToolEnvelope[Page[Environment]]:
-        return page_envelope(get_modal_adapter().list_environments())
+        items, warnings = get_modal_adapter().list_environments()
+        return page_envelope_partial(items, warnings)
 
     @mcp.tool(
         name="modal_get_environment",
