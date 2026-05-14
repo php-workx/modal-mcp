@@ -8,7 +8,6 @@ from fastmcp import FastMCP
 
 from modal_mcp.config import Settings
 from modal_mcp.toolsets.apps import register_app_tools
-from modal_mcp.toolsets.change import register_change_tools
 from modal_mcp.toolsets.containers import register_container_tools
 from modal_mcp.toolsets.discovery import register_discovery_tools
 from modal_mcp.toolsets.expert import register_expert_tools
@@ -26,7 +25,6 @@ def register_toolsets(mcp: FastMCP[Any], settings: Settings) -> None:
     register_container_tools(mcp)
     register_volume_tools(mcp)
     register_sandbox_tools(mcp)
-    register_change_tools(mcp)
     register_expert_tools(mcp)
 
 
