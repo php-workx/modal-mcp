@@ -210,7 +210,9 @@ def _build_list_fn_one_extra(
         "list_fn": list_fn,
         "page_envelope_partial": page_envelope_partial,
     }
-    exec(fn_src, ns)
+    # Safe: extra_param validated by _assert_valid_param_name() above; fn_src
+    # is fully internal (no external input).
+    exec(fn_src, ns)  # nosemgrep
     fn = ns["_list_tool"]
     mcp.tool(name=list_tool_name, tags=tags, annotations=READ_ONLY_ANNOTATIONS)(fn)
 
@@ -240,7 +242,9 @@ def _get_tool({get_param_name}: str) -> ToolEnvelope[Any]:
         "envelope": envelope,
         "not_found_message_template": not_found_message_template,
     }
-    exec(fn_src, ns)
+    # Safe: get_param_name validated by _assert_valid_param_name() above; fn_src
+    # is fully internal (no external input).
+    exec(fn_src, ns)  # nosemgrep
     fn = ns["_get_tool"]
     mcp.tool(name=get_tool_name, tags=tags, annotations=READ_ONLY_ANNOTATIONS)(fn)
 
