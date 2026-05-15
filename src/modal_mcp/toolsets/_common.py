@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import keyword
 import re
 from collections.abc import Callable, Sequence
@@ -193,30 +194,48 @@ def _build_list_fn_one_extra(
 ) -> None:
     """Register the list tool with one extra optional str parameter.
 
-    Uses exec so FastMCP's inspection sees a function with the real parameter
-    name (not **kwargs), which is required for correct schema generation.
+    Synthesizes the wrapper's signature with inspect.Signature so FastMCP's
+    introspection sees real parameter names (not **kwargs). FastMCP uses
+    inspect.signature(fn) and get_type_hints(fn) for schema generation; both
+    honor the __signature__ / __annotations__ overrides set below.
     """
     _assert_valid_param_name(extra_param)
-    fn_src = (
-        f"def _list_tool(environment_name: str | None = None,"
-        f" {extra_param}: str | None = None) -> ToolEnvelope[Any]:\n"
-        f"    items, warnings = list_fn(environment_name,"
-        f" **{{{extra_param!r}: {extra_param}}})\n"
-        f"    return page_envelope_partial(items, warnings)\n"
+
+    def _list_tool(**kwargs: Any) -> Any:
+        return page_envelope_partial(
+            *list_fn(
+                kwargs.get("environment_name"),
+                **{extra_param: kwargs.get(extra_param)},
+            )
+        )
+
+    annotation: Any = str | None
+    return_annotation: Any = ToolEnvelope[Any]
+    _list_tool.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+        parameters=[
+            inspect.Parameter(
+                "environment_name",
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                default=None,
+                annotation=annotation,
+            ),
+            inspect.Parameter(
+                extra_param,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                default=None,
+                annotation=annotation,
+            ),
+        ],
+        return_annotation=return_annotation,
     )
-    ns: dict[str, Any] = {
-        "Any": Any,
-        "ToolEnvelope": ToolEnvelope,
-        "list_fn": list_fn,
-        "page_envelope_partial": page_envelope_partial,
+    _list_tool.__annotations__ = {
+        "environment_name": annotation,
+        extra_param: annotation,
+        "return": return_annotation,
     }
-    # Safe: extra_param validated by _assert_valid_param_name() above; fn_src
-    # is fully internal (no external input).
-    # fmt: off
-    exec(fn_src, ns)  # nosemgrep: python.lang.security.audit.exec-detected.exec-detected  # noqa: E501
-    # fmt: on
-    fn = ns["_list_tool"]
-    mcp.tool(name=list_tool_name, tags=tags, annotations=READ_ONLY_ANNOTATIONS)(fn)
+    mcp.tool(name=list_tool_name, tags=tags, annotations=READ_ONLY_ANNOTATIONS)(
+        _list_tool
+    )
 
 
 def _build_get_fn(
@@ -227,30 +246,38 @@ def _build_get_fn(
     get_param_name: str,
     not_found_message_template: str,
 ) -> None:
-    """Register the get tool with a dynamically-named ref parameter."""
+    """Register the get tool with a dynamically-named ref parameter.
+
+    Synthesizes the wrapper's signature with inspect.Signature so FastMCP's
+    introspection sees the real parameter name.
+    """
     _assert_valid_param_name(get_param_name)
-    fn_src = f"""
-def _get_tool({get_param_name}: str) -> ToolEnvelope[Any]:
-    result = get_fn({get_param_name})
-    if result is None:
-        return not_found(not_found_message_template.format(ref={get_param_name}))
-    return envelope(result)
-"""
-    ns: dict[str, Any] = {
-        "Any": Any,
-        "ToolEnvelope": ToolEnvelope,
-        "get_fn": get_fn,
-        "not_found": not_found,
-        "envelope": envelope,
-        "not_found_message_template": not_found_message_template,
+
+    def _get_tool(**kwargs: Any) -> Any:
+        ref = kwargs[get_param_name]
+        result = get_fn(ref)
+        if result is None:
+            return not_found(not_found_message_template.format(ref=ref))
+        return envelope(result)
+
+    return_annotation: Any = ToolEnvelope[Any]
+    _get_tool.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+        parameters=[
+            inspect.Parameter(
+                get_param_name,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                annotation=str,
+            ),
+        ],
+        return_annotation=return_annotation,
+    )
+    _get_tool.__annotations__ = {
+        get_param_name: str,
+        "return": return_annotation,
     }
-    # Safe: get_param_name validated by _assert_valid_param_name() above; fn_src
-    # is fully internal (no external input).
-    # fmt: off
-    exec(fn_src, ns)  # nosemgrep: python.lang.security.audit.exec-detected.exec-detected  # noqa: E501
-    # fmt: on
-    fn = ns["_get_tool"]
-    mcp.tool(name=get_tool_name, tags=tags, annotations=READ_ONLY_ANNOTATIONS)(fn)
+    mcp.tool(name=get_tool_name, tags=tags, annotations=READ_ONLY_ANNOTATIONS)(
+        _get_tool
+    )
 
 
 __all__ = [
