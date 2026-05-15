@@ -479,9 +479,7 @@ class AppNormalizer:
 
     def normalize(self, raw: Any) -> tuple[App | None, list[str]]:
         try:
-            entity = normalize_app(
-                raw, signing_keys=self._signing_keys, ttl=self._ttl
-            )
+            entity = normalize_app(raw, signing_keys=self._signing_keys, ttl=self._ttl)
             return entity, []
         except Exception as exc:
             return None, [str(exc)]

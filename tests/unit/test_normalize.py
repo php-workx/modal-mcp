@@ -541,9 +541,7 @@ def test_log_batch_normalizer_returns_entity() -> None:
 
 def test_log_batch_normalizer_redacts_secret_strings() -> None:
     secret = "tok-abc"
-    n = LogBatchNormalizer(
-        signing_keys=SIGNING_KEYS, ttl=TTL, secret_strings=[secret]
-    )
+    n = LogBatchNormalizer(signing_keys=SIGNING_KEYS, ttl=TTL, secret_strings=[secret])
     entity, warnings = n.normalize(
         {
             "entries": [
