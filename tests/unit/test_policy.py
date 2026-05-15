@@ -386,6 +386,33 @@ async def test_classify_tool_unknown_tool_uses_mutating_tools_fallback(
     assert policy.toolset == "discovery"
 
 
+@pytest.mark.asyncio
+async def test_classify_tool_prefers_change_toolset_over_read_only_tag(
+    policy_settings: Settings,
+) -> None:
+    """classify_tool picks a change-category tag over read-only tags when both exist."""
+
+    mcp: FastMCP[Any] = FastMCP(name="test-multitag")
+
+    @mcp.tool(
+        name="test_multi",
+        tags={"apps", "change"},
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+    )
+    def test_multi() -> str:
+        return "ok"
+
+    middleware = PolicyMiddleware(
+        mcp,
+        policy_settings,
+        actor_resolver=lambda _: ApprovalActor("alice", "auth-1"),
+    )
+    tool_policy = await middleware.classify_tool("test_multi")
+
+    assert tool_policy.toolset == "change"
+    assert tool_policy.mutating is False
+
+
 def test_token_bucket_rate_limiter_consumes_and_refills() -> None:
     """Token buckets consume capacity and refill over deterministic time."""
 

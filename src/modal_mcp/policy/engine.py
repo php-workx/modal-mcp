@@ -23,7 +23,7 @@ from modal_mcp.policy.approval import (
     ApprovalTokenLedger,
 )
 from modal_mcp.policy.rate_limit import TokenBucketRateLimiter, rate_limit_key
-from modal_mcp.policy.rules import PolicyDecision, evaluate
+from modal_mcp.policy.rules import CHANGE_TOOLSETS, PolicyDecision, evaluate
 
 MUTATING_TOOLS = frozenset(
     {
@@ -159,12 +159,19 @@ class PolicyMiddleware(Middleware):
 
         tool = await self._mcp.get_tool(tool_name)
         if tool is None:
-            # Tool not in registry — fail closed: treat as mutating so the
-            # approval gate fires. MUTATING_TOOLS provides the toolset label.
+            # Tool not in FastMCP registry (never registered, or currently
+            # disabled via mcp.disable()). Fail closed: treat as mutating so
+            # the approval gate fires. Disabled tools will subsequently fail at
+            # call_next() — the approval is superfluous but harmless.
+            # MUTATING_TOOLS provides the toolset label.
             mutating = True
             toolset = "change" if tool_name in MUTATING_TOOLS else "discovery"
             return ToolPolicy(tool_name=tool_name, toolset=toolset, mutating=mutating)
-        toolset = next(iter(sorted(tool.tags)), "discovery")
+        tags = sorted(tool.tags)
+        toolset = next(
+            (t for t in tags if t in CHANGE_TOOLSETS),
+            None,
+        ) or next(iter(tags), "discovery")
         annotations = tool.annotations
         if annotations is not None and annotations.destructiveHint is True:
             return ToolPolicy(tool_name=tool_name, toolset=toolset, mutating=True)
