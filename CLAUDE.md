@@ -5,6 +5,14 @@ Read `AGENTS.md` first. It is the durable repo instruction file.
 Preserve the repo’s read-only Modal posture unless the task explicitly says
 otherwise.
 
+## Implementation Skills
+
+  When executing tasks as subagents:
+  - Invoke `agent-skills:context-engineering` at task start (context hierarchy, <2k lines/task)
+  - Invoke `agent-skills:source-driven-development` before writing any code touching external libraries/APIs
+  - Follow `test-driven-development` (superpowers) for all implementation — RED then GREEN then REFACTOR
+
+
 ## Agent skills
 
 ### Issue tracker
