@@ -3,6 +3,7 @@ target-version = "py312"
 
 extend-exclude = [
   ".agents",
+  ".claude",
   ".serena",
   ".tickets",
   ".venv",

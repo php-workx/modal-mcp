@@ -306,6 +306,77 @@ class TestProbeCredentials:
 
 
 # ---------------------------------------------------------------------------
+# Credential-source provenance parity
+# ---------------------------------------------------------------------------
+
+
+class TestDoctorCredentialProvenanceParity:
+    """Doctor's credential report must agree with ``CredentialSource.resolve``.
+
+    The bootstrap pipeline calls ``CredentialSource.resolve(settings)`` to
+    pick the TOML profile, while ``doctor`` re-derives it from env vars +
+    parsed ``.env``.  Both paths must select the same profile name so that
+    a green ``doctor`` report cannot lie about which credentials startup
+    will actually use.
+    """
+
+    def test_toml_profile_defaults_match(self, tmp_path: Path) -> None:
+        from pydantic import SecretStr
+
+        from modal_mcp.adapters.credentials import (
+            DEFAULT_MODAL_PROFILE,
+            CredentialSource,
+        )
+        from modal_mcp.config import Settings
+
+        toml_path = tmp_path / "modal.toml"
+        toml_path.write_text(
+            '[default]\ntoken_id = "ak-x"\ntoken_secret = "as-y"\n',
+            encoding="utf-8",
+        )
+
+        probe = probe_credentials(modal_config_path=toml_path)
+        settings = Settings(
+            modal_config_path=toml_path,
+            modal_mcp_allowed_origins=("http://127.0.0.1:8765",),
+            modal_mcp_signing_keys=SecretStr("kid1:" + "a" * 64),
+        )
+        resolved = CredentialSource.resolve(settings)
+
+        assert probe.profile == resolved.profile == DEFAULT_MODAL_PROFILE
+
+    def test_toml_named_profile_matches(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from pydantic import SecretStr
+
+        from modal_mcp.adapters.credentials import CredentialSource
+        from modal_mcp.config import Settings
+
+        toml_path = tmp_path / "modal.toml"
+        toml_path.write_text(
+            "[default]\n"
+            'token_id = "ak-d"\n'
+            'token_secret = "as-d"\n'
+            "[staging]\n"
+            'token_id = "ak-s"\n'
+            'token_secret = "as-s"\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MODAL_PROFILE", "staging")
+
+        probe = probe_credentials(modal_config_path=toml_path)
+        settings = Settings(
+            modal_config_path=toml_path,
+            modal_mcp_allowed_origins=("http://127.0.0.1:8765",),
+            modal_mcp_signing_keys=SecretStr("kid1:" + "a" * 64),
+        )
+        resolved = CredentialSource.resolve(settings)
+
+        assert probe.profile == resolved.profile == "staging"
+
+
+# ---------------------------------------------------------------------------
 # DiagnosticReport
 # ---------------------------------------------------------------------------
 

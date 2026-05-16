@@ -29,6 +29,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from modal_mcp.adapters.credentials import DEFAULT_MODAL_PROFILE
+
 #: Minimum character length for a value to be treated as a redactable secret.
 #: Must stay in sync with :attr:`modal_mcp.observability.redact.MIN_SECRET_LENGTH`.
 _MIN_SECRET_LENGTH: int = 4
@@ -102,6 +104,8 @@ class CredentialProbeResult:
     #: ``"modal_toml"``, or ``"none"``.
     source: str
     detail: str
+    #: Modal TOML profile name when ``source == "modal_toml"``; ``None`` otherwise.
+    profile: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -455,10 +459,25 @@ def probe_credentials(
         else Path(config_path_str).expanduser()
     )
     if effective_config_path.is_file():
+        # Profile name MUST stay in sync with what
+        # ``CredentialSource.resolve(settings)`` selects: pydantic-settings
+        # loads ``MODAL_PROFILE`` from os.environ (priority) then from the
+        # ``.env`` file, so we mirror that order here.  The fallback constant
+        # is imported from ``adapters.credentials`` for single-source-of-truth.
+        profile = (
+            os.environ.get("MODAL_PROFILE")
+            or (
+                parsed_env_file_vars.get("MODAL_PROFILE")
+                if parsed_env_file_vars
+                else None
+            )
+            or DEFAULT_MODAL_PROFILE
+        )
         return CredentialProbeResult(
             found=True,
             source="modal_toml",
             detail=str(effective_config_path),
+            profile=profile,
         )
 
     return CredentialProbeResult(found=False, source="none", detail="")
@@ -742,13 +761,20 @@ def run_doctor(
         env_file_vars=env_file_vars if env_file_is_usable else None,
     )
     if cred.found:
-        report.items.append(
-            DiagnosticItem(
-                "credentials",
-                CheckStatus.OK,
-                f"Modal credentials found ({cred.source}): {cred.detail}",
+        if cred.source == "environ":
+            message = "Modal credentials loaded from MODAL_TOKEN_ID env var"
+        elif cred.source == "env_file":
+            message = f"Modal credentials loaded from .env file: {cred.detail}"
+        elif cred.source == "file_backed":
+            message = f"Modal credentials loaded from file-backed tokens: {cred.detail}"
+        elif cred.source == "modal_toml":
+            message = (
+                f"Modal credentials loaded from {cred.detail} "
+                f"at profile '{cred.profile or DEFAULT_MODAL_PROFILE}'"
             )
-        )
+        else:
+            message = f"Modal credentials found ({cred.source}): {cred.detail}"
+        report.items.append(DiagnosticItem("credentials", CheckStatus.OK, message))
     else:
         report.items.append(
             DiagnosticItem(

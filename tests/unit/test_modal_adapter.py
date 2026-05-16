@@ -12,10 +12,11 @@ from pydantic import SecretStr
 from modal_mcp.adapters.modal_adapter import ModalSdkAdapter
 from modal_mcp.config import Settings
 from modal_mcp.domain.errors import ModalAdapterError
-from modal_mcp.domain.refs import RefPayload, encode_ref
+from modal_mcp.domain.refs import RefCodec, RefPayload, encode_ref
 
 SIGNING_KEYS = (("kid1", bytes.fromhex("a" * 64)),)
 SIGNING_KEY_TEXT = "kid1:" + "a" * 64
+REF_CODEC = RefCodec(SIGNING_KEYS)
 
 
 class ClientClosed(Exception):
@@ -144,56 +145,16 @@ async def test_create_uses_injected_client_and_aclose(modal_config_path: Path) -
     """Tests can inject a fake client without live Modal credentials."""
 
     client = FakeClient(FakeStub())
-    adapter = await ModalSdkAdapter.create(settings(modal_config_path), client=client)
+    adapter = await ModalSdkAdapter.create(
+        settings(modal_config_path),
+        client=client,
+        ref_codec=REF_CODEC,
+    )
 
     assert adapter.whoami().name == "acme"
     await adapter.aclose()
 
     assert client.closed is True
-
-
-@pytest.mark.asyncio
-async def test_create_uses_modal_from_env_aio(
-    modal_config_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Adapter startup uses Modal's async env constructor inside async lifespan."""
-
-    import modal
-
-    factory = FakeModalFactory(FakeClient(FakeStub()))
-    monkeypatch.setattr(modal.Client, "from_env", factory)
-
-    adapter = await ModalSdkAdapter.create(settings(modal_config_path))
-
-    assert adapter.whoami().name == "acme"
-    assert factory.aio_calls == [()]
-    assert factory.sync_called is False
-
-
-@pytest.mark.asyncio
-async def test_create_uses_modal_from_credentials_aio(
-    modal_config_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Explicit token startup uses Modal's async credential constructor."""
-
-    import modal
-
-    factory = FakeModalFactory(FakeClient(FakeStub()))
-    monkeypatch.setattr(modal.Client, "from_credentials", factory)
-    adapter_settings = settings(modal_config_path).model_copy(
-        update={
-            "modal_token_id": SecretStr("token-id"),
-            "modal_token_secret": SecretStr("token-secret"),
-        }
-    )
-
-    adapter = await ModalSdkAdapter.create(adapter_settings)
-
-    assert adapter.whoami().name == "acme"
-    assert factory.aio_calls == [("token-id", "token-secret")]
-    assert factory.sync_called is False
 
 
 @pytest.mark.asyncio
@@ -203,7 +164,11 @@ async def test_aclose_prefers_modal_private_close_aio(
     """Adapter shutdown uses Modal's async close hook when present."""
 
     client = FakeAsyncCloseClient()
-    adapter = await ModalSdkAdapter.create(settings(modal_config_path), client=client)
+    adapter = await ModalSdkAdapter.create(
+        settings(modal_config_path),
+        client=client,
+        ref_codec=REF_CODEC,
+    )
 
     await adapter.aclose()
 
@@ -221,6 +186,7 @@ async def test_list_apps_threads_configured_environment(
     adapter = await ModalSdkAdapter.create(
         settings(modal_config_path),
         client=FakeClient(stub),
+        ref_codec=REF_CODEC,
     )
 
     apps, warnings = adapter.list_apps()
@@ -235,15 +201,18 @@ async def test_list_apps_threads_configured_environment(
 async def test_call_with_reconnect_retries_once(modal_config_path: Path) -> None:
     """Transient channel/client failures reconnect and retry once."""
 
+    from modal_mcp.adapters.modal_adapter import ModalRpcClient
+
     first_stub = FakeStub()
     first_stub.fail_once = True
     second_stub = FakeStub()
     clients = [FakeClient(first_stub), FakeClient(second_stub)]
 
+    rpc = ModalRpcClient(clients[0], client_factory=lambda: clients[1])
     adapter = await ModalSdkAdapter.create(
         settings(modal_config_path),
-        client=clients[0],
-        client_factory=lambda: clients[1],
+        client=rpc,
+        ref_codec=REF_CODEC,
     )
 
     workspace = adapter.whoami()
@@ -301,6 +270,105 @@ async def test_modal_rpc_client_call_raises_after_two_failures(
 
 
 @pytest.mark.asyncio
+async def test_create_requires_explicit_ref_codec(
+    modal_config_path: Path,
+) -> None:
+    """ModalSdkAdapter.create accepts a pre-built RefCodec; no fallback parsing."""
+    from modal_mcp.adapters.modal_adapter import ModalRpcClient
+    from modal_mcp.domain.refs import RefCodec
+
+    ref_codec = RefCodec(SIGNING_KEYS)
+    client = FakeClient(FakeStub())
+    rpc = ModalRpcClient(client)
+
+    adapter = await ModalSdkAdapter.create(
+        settings(modal_config_path),
+        client=client,
+        ref_codec=ref_codec,
+    )
+
+    # The adapter exposes whoami via its assembled normalizer
+    assert adapter.whoami().name == "acme"
+    # Internal: ref_codec is stored as-is (not rebuilt from settings)
+    assert adapter._ref_codec is ref_codec
+    # rpc helper unused in this test but importing it ensures the assembly
+    # path still recognises a ModalRpcClient identity.
+    del rpc
+
+
+@pytest.mark.asyncio
+async def test_create_no_longer_accepts_client_factory(
+    modal_config_path: Path,
+) -> None:
+    """ModalSdkAdapter.create no longer accepts client_factory (moved to RPC)."""
+    from modal_mcp.domain.refs import RefCodec
+
+    with pytest.raises(TypeError, match="client_factory"):
+        await ModalSdkAdapter.create(
+            settings(modal_config_path),
+            client=FakeClient(FakeStub()),
+            ref_codec=RefCodec(SIGNING_KEYS),
+            client_factory=lambda: FakeClient(FakeStub()),  # type: ignore[call-arg]
+        )
+
+
+@pytest.mark.asyncio
+async def test_modal_rpc_client_from_credentials_uses_from_credentials_aio(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ModalRpcClient.from_credentials calls modal.Client.from_credentials.aio."""
+    import modal
+
+    from modal_mcp.adapters.credentials import ModalCredentials
+    from modal_mcp.adapters.modal_adapter import ModalRpcClient
+
+    factory = FakeModalFactory(FakeClient(FakeStub()))
+    monkeypatch.setattr(modal.Client, "from_credentials", factory)
+
+    creds = ModalCredentials(
+        token_id=SecretStr("ak-1"),
+        token_secret=SecretStr("as-1"),
+        source="env",
+        profile=None,
+    )
+    rpc = await ModalRpcClient.from_credentials(creds)
+
+    # The Modal SDK was called with the credential tuple
+    assert factory.aio_calls == [("ak-1", "as-1")]
+    # The returned rpc is wired to the fake client
+    assert rpc.request("Empty") is not None
+
+
+@pytest.mark.asyncio
+async def test_modal_rpc_client_from_credentials_validates_auth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ModalRpcClient.from_credentials runs a WorkspaceNameLookup ping."""
+    import modal
+
+    from modal_mcp.adapters.credentials import ModalCredentials
+    from modal_mcp.adapters.modal_adapter import ModalRpcClient
+
+    stub = FakeStub()
+    monkeypatch.setattr(
+        modal.Client,
+        "from_credentials",
+        FakeModalFactory(FakeClient(stub)),
+    )
+
+    creds = ModalCredentials(
+        token_id=SecretStr("ak-1"),
+        token_secret=SecretStr("as-1"),
+        source="env",
+        profile=None,
+    )
+    await ModalRpcClient.from_credentials(creds)
+
+    # Auth probe ran exactly once on construction
+    assert len(stub.requests) == 1
+
+
+@pytest.mark.asyncio
 async def test_call_with_reconnect_raises_retryable_without_factory(
     modal_config_path: Path,
 ) -> None:
@@ -311,6 +379,7 @@ async def test_call_with_reconnect_raises_retryable_without_factory(
     adapter = await ModalSdkAdapter.create(
         settings(modal_config_path),
         client=FakeClient(stub),
+        ref_codec=REF_CODEC,
     )
 
     with pytest.raises(ModalAdapterError) as exc_info:
@@ -332,6 +401,7 @@ async def test_verify_ref_env_rejects_cross_environment_refs(
     adapter = await ModalSdkAdapter.create(
         adapter_settings,
         client=FakeClient(FakeStub()),
+        ref_codec=REF_CODEC,
     )
     prod_ref = encode_ref(
         RefPayload(id="ap-1", env="prod", ws="acme", exp=4_102_444_800),
@@ -361,6 +431,7 @@ async def test_get_app_matches_signed_refs_by_decoded_native_id(
     adapter = await ModalSdkAdapter.create(
         settings(modal_config_path),
         client=FakeClient(FakeStub()),
+        ref_codec=REF_CODEC,
     )
 
     app = adapter.get_app("ap-1")
@@ -379,6 +450,7 @@ async def test_get_container_logs_does_not_send_blank_app_id(
     adapter = await ModalSdkAdapter.create(
         settings(modal_config_path),
         client=FakeClient(stub),
+        ref_codec=REF_CODEC,
     )
 
     adapter.get_container_logs("ta-1")
@@ -401,6 +473,7 @@ async def test_read_volume_text_returns_only_bounded_bytes(
     adapter = await ModalSdkAdapter.create(
         settings(modal_config_path),
         client=FakeClient(FakeStub()),
+        ref_codec=REF_CODEC,
     )
 
     assert adapter.read_volume_text("vo-1", "/data.txt", max_bytes=3) == "abcd"
@@ -439,6 +512,7 @@ async def test_list_apps_returns_partial_results_with_warnings(
     adapter = await ModalSdkAdapter.create(
         settings(modal_config_path),
         client=FakeClient(FakeStubWithBadApp()),
+        ref_codec=REF_CODEC,
     )
 
     apps, warnings = adapter.list_apps()

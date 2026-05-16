@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from modal_mcp.setup_files import (
+from modal_mcp.domain.file_io import (
     SetupFilesError,
     ensure_gitignore_entries,
     ensure_private_dir,

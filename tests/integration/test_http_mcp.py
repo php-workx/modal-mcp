@@ -247,6 +247,8 @@ def settings(tmp_path: Path) -> Settings:
     modal_config.write_text("[default]\n", encoding="utf-8")
     return Settings(
         modal_config_path=modal_config,
+        modal_token_id=SecretStr("ak-id"),
+        modal_token_secret=SecretStr("ak-secret"),
         modal_mcp_allowed_origins=("http://127.0.0.1:8765",),
         modal_mcp_allowed_hosts=("127.0.0.1", "localhost"),
         modal_mcp_signing_keys=SecretStr("kid1:" + "a" * 64),
@@ -261,6 +263,8 @@ def approval_settings(settings: Settings, tmp_path: Path) -> Settings:
     bearer_token.write_text("bearer-token\n", encoding="utf-8")
     return Settings(
         modal_config_path=settings.modal_config_path,
+        modal_token_id=settings.modal_token_id,
+        modal_token_secret=settings.modal_token_secret,
         modal_mcp_allowed_origins=settings.modal_mcp_allowed_origins,
         modal_mcp_allowed_hosts=settings.modal_mcp_allowed_hosts,
         modal_mcp_signing_keys=settings.modal_mcp_signing_keys,

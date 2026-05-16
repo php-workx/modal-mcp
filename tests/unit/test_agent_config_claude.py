@@ -20,7 +20,7 @@ from unittest.mock import patch as _patch
 
 import pytest
 
-from modal_mcp.agent_config import ClaudeInstallError, install_claude_config
+from modal_mcp.agent_targets import get_target
 from modal_mcp.agent_targets.claude import (
     CLAUDE_AGENT_NAME,
     CLAUDE_BACKUP_SUFFIX_TEMPLATE,
@@ -35,11 +35,21 @@ from modal_mcp.agent_targets.claude import (
     CLAUDE_TOP_LEVEL_KEY,
     CLAUDE_TRANSPORT,
     AgentTargetContract,
+    ClaudeInstallError,
     build_contract,
     format_startup_command,
     get_claude_config_dir,
     get_claude_config_path,
 )
+from modal_mcp.agent_targets.claude import (
+    install as install_claude_config,
+)
+
+
+def print_agent_config(target: str, **kwargs) -> None:
+    """Test helper mirroring the old agent_config.print_agent_config surface."""
+    get_target(target).render(**kwargs)
+
 
 # ---------------------------------------------------------------------------
 # Contract structure
@@ -887,8 +897,6 @@ def test_print_agent_config_claude_returns_none() -> None:
     """print_agent_config('claude') must return None (side-effect only)."""
     import io
 
-    from modal_mcp.agent_config import print_agent_config
-
     buf = io.StringIO()
     result = print_agent_config("claude", file=buf)
     assert result is None
@@ -897,8 +905,6 @@ def test_print_agent_config_claude_returns_none() -> None:
 def test_print_agent_config_claude_writes_to_file_arg() -> None:
     """print_agent_config('claude') must write to the supplied file argument."""
     import io
-
-    from modal_mcp.agent_config import print_agent_config
 
     buf = io.StringIO()
     print_agent_config("claude", file=buf)
@@ -910,8 +916,6 @@ def test_print_agent_config_claude_output_contains_json_block() -> None:
     """print_agent_config('claude') must include a JSON config block."""
     import io
     import json
-
-    from modal_mcp.agent_config import print_agent_config
 
     buf = io.StringIO()
     print_agent_config("claude", file=buf)
@@ -927,8 +931,6 @@ def test_print_agent_config_claude_output_contains_mcp_servers_key() -> None:
     """print_agent_config('claude') output must include mcpServers key."""
     import io
 
-    from modal_mcp.agent_config import print_agent_config
-
     buf = io.StringIO()
     print_agent_config("claude", file=buf)
     output = buf.getvalue()
@@ -939,8 +941,6 @@ def test_print_agent_config_claude_output_contains_modal_mcp_entry() -> None:
     """print_agent_config('claude') output must include modal-mcp entry."""
     import io
 
-    from modal_mcp.agent_config import print_agent_config
-
     buf = io.StringIO()
     print_agent_config("claude", file=buf)
     output = buf.getvalue()
@@ -950,8 +950,6 @@ def test_print_agent_config_claude_output_contains_modal_mcp_entry() -> None:
 def test_print_agent_config_claude_output_states_sse_or_http_transport() -> None:
     """Output must state whether this is HTTP or command-launched MCP."""
     import io
-
-    from modal_mcp.agent_config import print_agent_config
 
     buf = io.StringIO()
     print_agent_config("claude", file=buf)
@@ -966,7 +964,6 @@ def test_print_agent_config_claude_output_contains_server_url() -> None:
     """print_agent_config('claude') output must include the SSE URL."""
     import io
 
-    from modal_mcp.agent_config import print_agent_config
     from modal_mcp.agent_targets.claude import CLAUDE_SSE_URL
 
     buf = io.StringIO()
@@ -978,8 +975,6 @@ def test_print_agent_config_claude_output_contains_server_url() -> None:
 def test_print_agent_config_claude_output_contains_startup_command() -> None:
     """Output must include a startup command for starting the server."""
     import io
-
-    from modal_mcp.agent_config import print_agent_config
 
     buf = io.StringIO()
     print_agent_config("claude", file=buf)
@@ -1000,8 +995,6 @@ def test_print_agent_config_claude_startup_command_uses_absolute_env_file() -> N
     """
     import io
     import re
-
-    from modal_mcp.agent_config import print_agent_config
 
     buf = io.StringIO()
     print_agent_config("claude", file=buf)
@@ -1031,8 +1024,6 @@ def test_print_agent_config_claude_with_env_file(
     """print_agent_config(..., env_file=...) must embed the given path."""
     import io
 
-    from modal_mcp.agent_config import print_agent_config
-
     abs_env = str(tmp_path / ".env")
     buf = io.StringIO()
     print_agent_config("claude", env_file=abs_env, file=buf)
@@ -1048,8 +1039,6 @@ def test_print_agent_config_claude_with_path_object_env_file(
     """print_agent_config('claude', env_file=Path(...)) must accept Path objects."""
     import io
 
-    from modal_mcp.agent_config import print_agent_config
-
     abs_env = tmp_path / ".env"
     buf = io.StringIO()
     print_agent_config("claude", env_file=abs_env, file=buf)
@@ -1061,8 +1050,6 @@ def test_print_agent_config_claude_rejects_relative_env_file() -> None:
     """print_agent_config('claude') must raise ValueError for a relative env_file."""
     import io
 
-    from modal_mcp.agent_config import print_agent_config
-
     with pytest.raises(ValueError, match="absolute path"):
         print_agent_config("claude", env_file="relative/.env", file=io.StringIO())
 
@@ -1070,8 +1057,6 @@ def test_print_agent_config_claude_rejects_relative_env_file() -> None:
 def test_print_agent_config_claude_does_not_leak_secrets() -> None:
     """print_agent_config('claude') output must not contain secret keywords."""
     import io
-
-    from modal_mcp.agent_config import print_agent_config
 
     buf = io.StringIO()
     print_agent_config("claude", file=buf)
@@ -1087,8 +1072,6 @@ def test_print_agent_config_claude_does_not_write_files(tmp_path: Path) -> None:
     """print_agent_config('claude') must not create or modify any files."""
     import io
 
-    from modal_mcp.agent_config import print_agent_config
-
     before = set(tmp_path.iterdir())
     buf = io.StringIO()
     print_agent_config("claude", file=buf)
@@ -1103,8 +1086,6 @@ def test_print_agent_config_claude_case_insensitive() -> None:
     """Target name matching must be case-insensitive for claude."""
     import io
 
-    from modal_mcp.agent_config import print_agent_config
-
     buf1 = io.StringIO()
     buf2 = io.StringIO()
     buf3 = io.StringIO()
@@ -1118,8 +1099,6 @@ def test_print_agent_config_claude_case_insensitive() -> None:
 def test_print_agent_config_claude_desktop_alias() -> None:
     """'claude_desktop' must produce the same output as 'claude'."""
     import io
-
-    from modal_mcp.agent_config import print_agent_config
 
     buf1 = io.StringIO()
     buf2 = io.StringIO()
@@ -1136,7 +1115,6 @@ def test_print_agent_config_claude_output_json_is_structurally_complete() -> Non
     import io
     import json
 
-    from modal_mcp.agent_config import print_agent_config
     from modal_mcp.agent_targets.claude import (
         CLAUDE_SERVER_NAME,
         CLAUDE_SSE_URL,
@@ -1582,7 +1560,7 @@ def test_install_claude_validation_failure_removes_file_when_no_backup(
     # Inject a validation error by making _json.loads raise on every call.
     with (
         _patch(
-            "modal_mcp.agent_config._json.loads",
+            "modal_mcp.agent_targets.claude.json.loads",
             side_effect=_json_module.JSONDecodeError("injected", "", 0),
         ),
         pytest.raises(ClaudeInstallError, match=r"[Vv]alidation"),
@@ -1611,7 +1589,7 @@ def test_install_claude_validation_failure_with_backup_restores_original(
 
     with (
         _patch(
-            "modal_mcp.agent_config._json.loads",
+            "modal_mcp.agent_targets.claude.json.loads",
             side_effect=_json_module.JSONDecodeError("injected", "", 0),
         ),
         pytest.raises(ClaudeInstallError, match=r"[Vv]alidation"),

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from urllib.parse import urlsplit
 
 from starlette.status import HTTP_403_FORBIDDEN
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from .config import Settings
+from .config import ConfigError
 
 
 class OriginValidationError(ValueError):
@@ -88,59 +89,65 @@ def _normalize_origin(origin: str | None) -> str | None:
     return f"{parsed.scheme.lower()}://{host}:{port}"
 
 
-def _normalized_allowed_hosts(settings: Settings) -> set[str]:
-    allowed: set[str] = set()
-    for candidate in settings.modal_mcp_allowed_hosts:
-        normalized = _normalize_host(candidate)
-        if normalized is not None:
-            allowed.add(normalized)
-    return allowed
-
-
-def _normalized_allowed_origins(settings: Settings) -> set[str]:
-    allowed: set[str] = set()
-    for candidate in settings.modal_mcp_allowed_origins:
-        normalized = _normalize_origin(candidate)
-        if normalized is not None:
-            allowed.add(normalized)
-    return allowed
-
-
-def validate_origin(origin: str | None, host: str | None, settings: Settings) -> None:
-    """Validate request `Origin` and `Host` headers against configured allowlists."""
-
-    normalized_origin = _normalize_origin(origin)
-    if normalized_origin is None:
-        if origin is None:
-            msg = "missing Origin header"
-        elif origin.strip().lower() == "null":
-            msg = "null Origin header is not allowed"
-        else:
-            msg = f"unsupported Origin value: {origin!r}"
-        raise OriginValidationError(msg)
-
-    normalized_host = _normalize_host(host)
-    if normalized_host is None:
-        msg = "missing or malformed Host header"
-        raise OriginValidationError(msg)
-
-    allowed_hosts = _normalized_allowed_hosts(settings)
-    if normalized_host not in allowed_hosts:
-        msg = f"host is not allowlisted: {host!r}"
-        raise OriginValidationError(msg)
-
-    allowed_origins = _normalized_allowed_origins(settings)
-    if normalized_origin not in allowed_origins:
-        msg = f"origin is not allowlisted: {origin!r}"
-        raise OriginValidationError(msg)
+_NORMALIZERS = {
+    "origin": _normalize_origin,
+    "host": _normalize_host,
+}
+_ENV_VAR = {
+    "origin": "MODAL_MCP_ALLOWED_ORIGINS",
+    "host": "MODAL_MCP_ALLOWED_HOSTS",
+}
 
 
 class OriginGuard:
-    """ASGI middleware that rejects untrusted browser origins before MCP handling."""
+    """ASGI middleware that rejects untrusted browser origins before MCP handling.
 
-    def __init__(self, app: ASGIApp, settings: Settings) -> None:
+    Allowed origins and hosts are normalised once at construction time and stored
+    as ``frozenset[str]``.  The per-request hot path is two header lookups plus
+    two set-membership checks; the URL parser is never invoked over the
+    *configured* allowlists per request.
+
+    Malformed allowlist entries raise :class:`ConfigError` at startup, naming the
+    bad value, so configuration mistakes surface loudly rather than silently
+    rejecting every subsequent request.
+    """
+
+    __slots__ = ("_allowed_hosts", "_allowed_origins", "_app")
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        allowed_origins: Sequence[str],
+        allowed_hosts: Sequence[str],
+    ) -> None:
         self._app = app
-        self._settings = settings
+        self._allowed_origins = self._build_allowed_set(allowed_origins, kind="origin")
+        self._allowed_hosts = self._build_allowed_set(allowed_hosts, kind="host")
+
+    @staticmethod
+    def _build_allowed_set(
+        entries: Sequence[str],
+        *,
+        kind: str,
+    ) -> frozenset[str]:
+        """Normalise and validate ``entries`` once at construction.
+
+        Raises :class:`ConfigError` on any bad input. ``kind`` is ``"origin"``
+        or ``"host"`` and selects which normaliser and which env-var name to
+        mention in the error message.
+        """
+
+        normalise = _NORMALIZERS[kind]
+        env_var = _ENV_VAR[kind]
+        normalised: set[str] = set()
+        for raw in entries:
+            value = normalise(raw)
+            if value is None:
+                msg = f"{env_var} entry is not a valid {kind}: {raw!r}"
+                raise ConfigError(msg)
+            normalised.add(value)
+        return frozenset(normalised)
 
     async def __call__(
         self,
@@ -154,12 +161,13 @@ class OriginGuard:
             await self._app(scope, receive, send)
             return
 
-        origin = _get_header(scope, b"origin")
-        host = _get_header(scope, b"host")
+        origin = _normalize_origin(_get_header(scope, b"origin"))
+        if origin is None or origin not in self._allowed_origins:
+            await self._reject(scope, send)
+            return
 
-        try:
-            validate_origin(origin, host, self._settings)
-        except OriginValidationError:
+        host = _normalize_host(_get_header(scope, b"host"))
+        if host is None or host not in self._allowed_hosts:
             await self._reject(scope, send)
             return
 
@@ -184,4 +192,4 @@ class OriginGuard:
         await send({"type": "http.response.body", "body": body})
 
 
-__all__ = ["OriginGuard", "OriginValidationError", "validate_origin"]
+__all__ = ["OriginGuard", "OriginValidationError"]

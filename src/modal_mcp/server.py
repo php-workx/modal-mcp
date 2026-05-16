@@ -17,7 +17,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
-from modal_mcp.adapters.modal_adapter import ModalSdkAdapter
+from modal_mcp.adapters.credentials import CredentialSource
+from modal_mcp.adapters.modal_adapter import ModalRpcClient, ModalSdkAdapter
 from modal_mcp.adapters.registry import bind_modal_adapter
 from modal_mcp.asgi import OriginGuard
 from modal_mcp.auth import STATIC_BEARER_SCOPE, StaticTokenVerifier, build_auth
@@ -28,7 +29,7 @@ from modal_mcp.config import (
     scrub_secret_env,
 )
 from modal_mcp.domain.errors import ErrorCode, ModalAdapterError
-from modal_mcp.domain.refs import parse_signing_keys
+from modal_mcp.domain.refs import RefCodec, parse_signing_keys
 from modal_mcp.observability.audit import audit_sink_from_settings
 from modal_mcp.observability.logger import configure_logging
 from modal_mcp.observability.tracing import OtelMiddleware
@@ -40,6 +41,7 @@ from modal_mcp.policy.approval import (
     resolve_http_actor,
     validate_approval_http_request,
 )
+from modal_mcp.policy.context import PolicyContext
 from modal_mcp.policy.engine import PolicyMiddleware
 from modal_mcp.policy.rate_limit import TokenBucketRateLimiter, rate_limit_key
 from modal_mcp.toolsets import register_toolsets
@@ -63,9 +65,29 @@ SettingsFactory = Callable[[], Settings]
 
 
 async def _default_adapter_factory(settings: Settings) -> ModalSdkAdapter:
-    """Create the production Modal SDK adapter."""
+    """Production bootstrap: resolve credentials, build client, assemble adapter.
 
-    return await ModalSdkAdapter.create(settings)
+    Failures at any phase carry provenance:
+
+    - CredentialError mentions which sources were tried (env / TOML at profile).
+    - ModalAdapterError(UPSTREAM_ERROR) from the auth ping includes the
+      credential source via ``creds.describe()``.
+    """
+
+    creds = CredentialSource.resolve(settings)
+    rpc = await ModalRpcClient.from_credentials(creds)
+    if settings.modal_mcp_signing_keys is None:
+        # Settings validation guards this; the check is here for type-narrowing.
+        msg = "MODAL_MCP_SIGNING_KEYS is required to build RefCodec"
+        raise ModalAdapterError(ErrorCode.INTERNAL_DRIFT, msg)
+    ref_codec = RefCodec(
+        parse_signing_keys(settings.modal_mcp_signing_keys.get_secret_value())
+    )
+    return await ModalSdkAdapter.create(
+        settings,
+        client=rpc,
+        ref_codec=ref_codec,
+    )
 
 
 def _approval_ledger_from_settings(settings: Settings) -> ApprovalTokenLedger:
@@ -74,6 +96,11 @@ def _approval_ledger_from_settings(settings: Settings) -> ApprovalTokenLedger:
     return ApprovalTokenLedger(settings.modal_mcp_approval_ledger)
 
 
+# NOTE: parallels PolicyContext._build_signing_keys but raises
+# ModalAdapterError (HTTP 401) instead of ConfigError (startup abort). The
+# HTTP route runs at request time and must surface a wire-level auth error,
+# not a fatal startup error. Do not merge these two helpers without an
+# error-code migration plan.
 def _approval_signing_keys_from_settings(
     settings: Settings,
 ) -> tuple[tuple[str, bytes], ...]:
@@ -375,6 +402,18 @@ def create_mcp(
     configure_logging(resolved_settings)
     resolved_audit_sink = audit_sink or audit_sink_from_settings(resolved_settings)
 
+    # Pre-bootstrap: validate credentials *before* FastMCP starts.  This moves
+    # the most common operator misconfiguration (missing tokens, missing
+    # profile) out of the lifespan, where it would otherwise be swallowed by
+    # FastMCP's startup error reporting, into the synchronous caller path
+    # where uvicorn / pytest can surface it.  We deliberately do NOT eagerly
+    # construct the Modal client here: that would open a network connection
+    # at module-import time and break tests that never want to talk to Modal.
+    # The full bootstrap (resolve -> client -> adapter) still happens inside
+    # the lifespan via adapter_factory; the auth probe runs there.
+    if adapter_factory is _default_adapter_factory:
+        CredentialSource.resolve(resolved_settings)
+
     @asynccontextmanager
     async def lifespan(server: FastMCP[Any]) -> AsyncIterator[None]:
         async with fastmcp_lifespan(
@@ -391,14 +430,14 @@ def create_mcp(
         auth=build_auth(resolved_settings),
     )
     mcp.add_middleware(OtelMiddleware(resolved_settings))
-    mcp.add_middleware(
-        PolicyMiddleware(
-            mcp,
-            resolved_settings,
-            approval_ledger=approval_ledger,
-            audit_sink=resolved_audit_sink,
-        )
-    )
+
+    policy_context = PolicyContext.from_settings(resolved_settings)
+    if approval_ledger is not None:
+        policy_context = replace(policy_context, approval_ledger=approval_ledger)
+    if resolved_audit_sink is not None:
+        policy_context = replace(policy_context, audit_sink=resolved_audit_sink)
+
+    mcp.add_middleware(PolicyMiddleware(mcp, policy_context, resolved_settings))
     register_toolsets(mcp, resolved_settings)
 
     disabled_toolsets = ALL_TOOLSETS - set(resolved_settings.modal_mcp_enabled_toolsets)
@@ -429,7 +468,23 @@ def create_asgi_app(
         audit_sink=audit_sink,
         _skip_security_check=True,
     )
-    middleware = [Middleware(OriginGuard, settings=resolved_settings)]
+    # Validate origin/host allowlists eagerly so configuration mistakes raise
+    # ConfigError at startup instead of surfacing as silent per-request 403s.
+    # Starlette instantiates Middleware lazily on first request, so we must
+    # exercise OriginGuard's construction-time validation here ourselves.
+    OriginGuard._build_allowed_set(
+        resolved_settings.modal_mcp_allowed_origins, kind="origin"
+    )
+    OriginGuard._build_allowed_set(
+        resolved_settings.modal_mcp_allowed_hosts, kind="host"
+    )
+    middleware = [
+        Middleware(
+            OriginGuard,
+            allowed_origins=resolved_settings.modal_mcp_allowed_origins,
+            allowed_hosts=resolved_settings.modal_mcp_allowed_hosts,
+        )
+    ]
     mcp_app = mcp.http_app(path="/mcp", middleware=middleware)
     app = Starlette(
         routes=[
@@ -460,10 +515,37 @@ def run(settings: Settings | None = None) -> None:
     uvicorn.run(create_asgi_app(resolved_settings), host=host, port=port)
 
 
+def run_stdio(settings: Settings | None = None) -> None:
+    """Run the Modal MCP server over stdin/stdout (stdio transport).
+
+    Used by CLI clients such as Codex that spawn the server as a subprocess
+    and communicate via the MCP stdio transport rather than HTTP.  Auth and
+    the HTTP approval route are not applicable here; everything else that
+    ``create_mcp`` composes (``assert_runtime_security``, ``PolicyMiddleware``,
+    ``OtelMiddleware``, redaction, rate limiting, mutation gating, the
+    audit sink, the adapter lifespan, tool filtering, and the read-only
+    posture) MUST stay wired or stdio launches will ship a silent security
+    regression versus the HTTP transport.
+
+    Implementation note: this reuses ``create_mcp`` directly rather than
+    rebuilding a fresh ``FastMCP`` so the two transports cannot drift on
+    middleware, toolset gating, or runtime-security checks.  ``scrub_secret_env``
+    is invoked here for parity with ``create_asgi_app`` — both transports
+    should clear sensitive env vars from the process before the server begins
+    accepting requests.
+    """
+
+    resolved_settings = settings or _settings_from_env()
+    scrub_secret_env()
+    mcp = create_mcp(resolved_settings)
+    mcp.run(transport="stdio")
+
+
 __all__ = [
     "ALL_TOOLSETS",
     "create_asgi_app",
     "create_mcp",
     "fastmcp_lifespan",
     "run",
+    "run_stdio",
 ]

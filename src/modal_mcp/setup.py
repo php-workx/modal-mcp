@@ -39,7 +39,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
 
-from modal_mcp.setup_files import (
+from modal_mcp.domain.file_io import (
     SetupFilesError,
     ensure_gitignore_entries,
     write_secret,

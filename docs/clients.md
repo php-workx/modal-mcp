@@ -101,7 +101,7 @@ Manual equivalent:
 ```toml
 [mcp_servers.modal-mcp]
 command = "modal-mcp"
-args = ["run", "--env-file", "/absolute/path/to/project/.env"]
+args = ["stdio", "--env-file", "/absolute/path/to/project/.env"]
 ```
 
 Use an absolute `.env` path. Codex may launch subprocesses from a different

@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from modal_mcp.__main__ import build_parser, main
+from modal_mcp.domain.file_io import SetupFilesError
 from modal_mcp.domain.refs import parse_signing_keys
 from modal_mcp.observability.redact import REDACTION_PLACEHOLDER, redact_string
 from modal_mcp.setup import (
@@ -29,7 +30,6 @@ from modal_mcp.setup import (
     warn_if_modal_toml_present,
     write_service_token_files,
 )
-from modal_mcp.setup_files import SetupFilesError
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -56,7 +56,7 @@ def test_parser_has_subparsers() -> None:
 
 @pytest.mark.parametrize(
     "subcommand",
-    ["run", "setup", "doctor", "print-agent-config"],
+    ["run", "stdio", "setup", "doctor", "print-agent-config"],
 )
 def test_subcommand_registered(subcommand: str) -> None:
     """Each expected subcommand must be parseable by the parser."""
@@ -76,7 +76,7 @@ def test_subcommands_visible_in_help(capsys: pytest.CaptureFixture[str]) -> None
     with pytest.raises(SystemExit):
         parser.parse_args(["--help"])
     captured = capsys.readouterr()
-    for subcommand in ("run", "setup", "doctor", "print-agent-config"):
+    for subcommand in ("run", "stdio", "setup", "doctor", "print-agent-config"):
         assert subcommand in captured.out, f"'{subcommand}' not found in --help output"
 
 
@@ -125,6 +125,58 @@ def test_run_env_file_populates_environment(
     assert seen_in_run == ["xyz789"], (
         "--env-file must populate os.environ before server.run() is called"
     )
+
+
+# ---------------------------------------------------------------------------
+# 'stdio' subcommand
+# ---------------------------------------------------------------------------
+
+
+def test_stdio_subcommand_delegates_to_server_run_stdio() -> None:
+    """main(['stdio']) must invoke modal_mcp.server.run_stdio() exactly once."""
+    with patch("modal_mcp.server.run_stdio") as mock_run_stdio:
+        result = main(["stdio"])
+    mock_run_stdio.assert_called_once_with()
+    assert result == 0
+
+
+def test_stdio_subcommand_does_not_call_server_run() -> None:
+    """main(['stdio']) must NOT touch modal_mcp.server.run (the HTTP entry).
+
+    Regression guard for the dropped-stdio incident: if the dispatch table
+    ever wires 'stdio' to _cmd_run by mistake, Codex installs silently start
+    uvicorn and time out the MCP initialize handshake.
+    """
+    with (
+        patch("modal_mcp.server.run") as mock_http_run,
+        patch("modal_mcp.server.run_stdio") as mock_stdio_run,
+    ):
+        result = main(["stdio"])
+    mock_stdio_run.assert_called_once_with()
+    mock_http_run.assert_not_called()
+    assert result == 0
+
+
+def test_stdio_subcommand_accepts_env_file_flag() -> None:
+    """main(['stdio', '--env-file', '/tmp/x.env']) must not raise a parse error."""
+    with patch("modal_mcp.server.run_stdio"):
+        result = main(["stdio", "--env-file", "/tmp/x.env"])
+    assert result == 0
+
+
+def test_stdio_subcommand_loads_env_file_when_present(tmp_path: Path) -> None:
+    """If --env-file points to a real file, dotenv.load_dotenv must be called."""
+    env_path = tmp_path / "stdio.env"
+    env_path.write_text("MODAL_MCP_DUMMY=1\n", encoding="utf-8")
+    with (
+        patch("modal_mcp.server.run_stdio"),
+        patch("dotenv.load_dotenv") as mock_load,
+    ):
+        result = main(["stdio", "--env-file", str(env_path)])
+    assert result == 0
+    mock_load.assert_called_once()
+    called_path = mock_load.call_args.args[0]
+    assert Path(called_path) == env_path
 
 
 # ---------------------------------------------------------------------------
@@ -647,7 +699,7 @@ def test_setup_install_codex_absolute_env_file_passes_path_guard(
     abs_env = tmp_path / "test.env"
 
     with patch(
-        "modal_mcp.agent_config.install_codex_config", return_value="dry_run"
+        "modal_mcp.agent_targets.codex.install", return_value="dry_run"
     ) as mock_install:
         result = main(
             ["setup", "--install", "codex", "--env-file", str(abs_env), "--dry-run"]

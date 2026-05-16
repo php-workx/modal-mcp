@@ -29,11 +29,7 @@ from unittest.mock import patch
 
 import pytest
 
-from modal_mcp.agent_config import (
-    CodexInstallError,
-    install_codex_config,
-    print_agent_config,
-)
+from modal_mcp.agent_targets import get_target
 from modal_mcp.agent_targets.codex import (
     CODEX_AGENT_NAME,
     CODEX_BACKUP_SUFFIX_TEMPLATE,
@@ -47,9 +43,19 @@ from modal_mcp.agent_targets.codex import (
     CODEX_TOP_LEVEL_KEY,
     CODEX_TRANSPORT,
     AgentTargetContract,
+    CodexInstallError,
     build_contract,
     format_config_snippet,
 )
+from modal_mcp.agent_targets.codex import (
+    install as install_codex_config,
+)
+
+
+def print_agent_config(target: str, **kwargs) -> None:
+    """Test helper mirroring the old agent_config.print_agent_config surface."""
+    get_target(target).render(**kwargs)
+
 
 # ---------------------------------------------------------------------------
 # Field presence and type
@@ -185,10 +191,10 @@ def test_codex_contract_server_args_template_contains_env_file_flag() -> None:
     assert args == CODEX_SERVER_ARGS_TEMPLATE
 
 
-def test_codex_contract_server_args_template_starts_with_run() -> None:
-    """server_args_template must begin with 'run' subcommand."""
+def test_codex_contract_server_args_template_starts_with_stdio() -> None:
+    """server_args_template must begin with 'stdio' subcommand."""
     args = CODEX_CONTRACT.server_args_template
-    assert args[0] == "run", "first arg must be the 'run' subcommand"
+    assert args[0] == "stdio", "first arg must be the 'stdio' subcommand"
 
 
 def test_codex_command_snippet_uses_absolute_env_file() -> None:
@@ -527,7 +533,7 @@ def test_codex_contract_generated_block_is_valid_toml() -> None:
     parsed = tomllib.loads(toml_block)
     server_table = parsed[CODEX_CONTRACT.top_level_key][CODEX_CONTRACT.server_name]
     assert server_table["command"] == CODEX_CONTRACT.server_command
-    assert server_table["args"][0] == "run"
+    assert server_table["args"][0] == "stdio"
     assert "--env-file" in server_table["args"]
     assert env_file in server_table["args"]
 
@@ -735,12 +741,12 @@ def test_format_config_snippet_custom_command() -> None:
     assert parsed[CODEX_TOP_LEVEL_KEY][CODEX_SERVER_NAME]["command"] == custom_cmd
 
 
-def test_format_config_snippet_args_start_with_run() -> None:
-    """The rendered args list must begin with the 'run' subcommand."""
+def test_format_config_snippet_args_start_with_stdio() -> None:
+    """The rendered args list must begin with the 'stdio' subcommand."""
     snippet = format_config_snippet()
     parsed = tomllib.loads(snippet)
     args = parsed[CODEX_TOP_LEVEL_KEY][CODEX_SERVER_NAME]["args"]
-    assert args[0] == "run"
+    assert args[0] == "stdio"
 
 
 def test_format_config_snippet_uses_correct_toml_key() -> None:
@@ -905,8 +911,8 @@ def test_print_agent_config_codex_does_not_write_files(tmp_path: Path) -> None:
 
 def test_print_agent_config_unknown_target_raises() -> None:
     """print_agent_config() must raise ValueError for unknown targets."""
-    with pytest.raises(ValueError, match="Unknown target"):
-        print_agent_config("cursor", file=io.StringIO())
+    with pytest.raises(ValueError, match="Unknown agent target"):
+        print_agent_config("definitely-not-a-real-target", file=io.StringIO())
 
 
 def test_print_agent_config_codex_case_insensitive() -> None:
@@ -1465,7 +1471,7 @@ def test_install_validation_failure_removes_file_when_no_backup(tmp_path: Path) 
     # the post-write validation step; there is no prior-content TOML parse.
     with (
         patch(
-            "modal_mcp.agent_config.tomllib.loads",
+            "modal_mcp.agent_targets.codex.tomllib.loads",
             side_effect=tomllib.TOMLDecodeError("injected"),
         ),
         pytest.raises(CodexInstallError, match=r"[Vv]alidation"),
@@ -1502,7 +1508,7 @@ def test_install_validation_failure_with_backup_restores_original(
     # Inject a validation error in the post-write step.
     with (
         patch(
-            "modal_mcp.agent_config.tomllib.loads",
+            "modal_mcp.agent_targets.codex.tomllib.loads",
             side_effect=tomllib.TOMLDecodeError("injected"),
         ),
         pytest.raises(CodexInstallError, match=r"[Vv]alidation"),
