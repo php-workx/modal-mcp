@@ -9,7 +9,7 @@ import pytest
 from pydantic import SecretStr, ValidationError
 
 import modal_mcp.config as config
-from modal_mcp.asgi import OriginGuard, OriginValidationError, validate_origin
+from modal_mcp.asgi import OriginGuard
 from modal_mcp.config import ConfigError, Settings, assert_runtime_security
 from modal_mcp.server import create_asgi_app
 
@@ -290,40 +290,135 @@ def test_hosted_cli_fallback_flag_is_rejected_before_runtime() -> None:
         )
 
 
+# --- OriginGuard construction-time validation -------------------------------
+
+
 @pytest.mark.parametrize(
-    ("origin", "message"),
+    ("bad_entry", "kind"),
     [
-        (None, "missing Origin header"),
-        ("null", "null Origin header"),
-        ("chrome-extension://abcd", "unsupported Origin value"),
-        ("ftp://mcp.example.com", "unsupported Origin value"),
+        ("ftp://mcp.example.com", "origin"),
+        ("http://user:pw@mcp.example.com", "origin"),
+        ("http://mcp.example.com/path", "origin"),
+        ("http://mcp.example.com?x=1", "origin"),
+        ("http://mcp.example.com#frag", "origin"),
+        ("null", "origin"),
+        ("", "origin"),
     ],
 )
-def test_validate_origin_rejects_invalid_or_missing_origin(
-    security_settings: Settings,
-    origin: str | None,
-    message: str,
+def test_origin_guard_init_rejects_malformed_origin_entry(
+    bad_entry: str,
+    kind: str,
 ) -> None:
-    """Missing, null, and non-HTTP origins fail before request handling."""
+    """Malformed allowed-origin entries fail loudly at startup."""
 
-    with pytest.raises(OriginValidationError, match=message):
-        validate_origin(origin, "localhost:8765", security_settings)
-
-
-def test_validate_origin_rejects_unlisted_origin_and_host(
-    security_settings: Settings,
-) -> None:
-    """Host and origin allowlists both gate request admission."""
-
-    with pytest.raises(OriginValidationError, match="origin is not allowlisted"):
-        validate_origin("https://evil.example.com", "localhost:8765", security_settings)
-
-    with pytest.raises(OriginValidationError, match="host is not allowlisted"):
-        validate_origin(
-            "https://mcp.example.com",
-            "evil.example.com",
-            security_settings,
+    del kind  # used only for parameter labelling
+    with pytest.raises(ConfigError, match=r"MODAL_MCP_ALLOWED_ORIGINS"):
+        OriginGuard(
+            _noop_app,
+            allowed_origins=("http://127.0.0.1:8765", bad_entry),
+            allowed_hosts=("127.0.0.1",),
         )
+
+
+@pytest.mark.parametrize(
+    "bad_entry",
+    [
+        "http://user@host",
+        "host:not-a-port",
+        "host/path",
+        "host?x=1",
+        "",
+    ],
+)
+def test_origin_guard_init_rejects_malformed_host_entry(bad_entry: str) -> None:
+    """Malformed allowed-host entries fail loudly at startup."""
+
+    with pytest.raises(ConfigError, match=r"MODAL_MCP_ALLOWED_HOSTS"):
+        OriginGuard(
+            _noop_app,
+            allowed_origins=("http://127.0.0.1:8765",),
+            allowed_hosts=("127.0.0.1", bad_entry),
+        )
+
+
+def test_origin_guard_init_names_offending_value_in_error() -> None:
+    """The ConfigError message includes the bad value (so operators can grep logs)."""
+
+    with pytest.raises(ConfigError, match=r"ftp://bad\.example\.com"):
+        OriginGuard(
+            _noop_app,
+            allowed_origins=("http://127.0.0.1:8765", "ftp://bad.example.com"),
+            allowed_hosts=("127.0.0.1",),
+        )
+
+
+def test_origin_guard_init_does_not_store_settings() -> None:
+    """The guard must not retain Settings; only precomputed sets are kept."""
+
+    guard = OriginGuard(
+        _noop_app,
+        allowed_origins=("http://127.0.0.1:8765",),
+        allowed_hosts=("127.0.0.1", "localhost"),
+    )
+
+    for attr in vars(guard):
+        value = getattr(guard, attr)
+        assert not isinstance(value, Settings), (
+            f"OriginGuard.{attr} unexpectedly holds Settings"
+        )
+
+
+def test_origin_guard_init_precomputes_frozen_sets() -> None:
+    """Allowed sets are immutable frozensets, normalised once at construction."""
+
+    guard = OriginGuard(
+        _noop_app,
+        allowed_origins=("HTTP://127.0.0.1:8765",),
+        allowed_hosts=("LocalHost",),
+    )
+
+    # Private attributes are part of this module's contract; tests intentionally
+    # peek to verify the precomputation invariant.
+    allowed_origins = guard._allowed_origins
+    allowed_hosts = guard._allowed_hosts
+    assert isinstance(allowed_origins, frozenset)
+    assert isinstance(allowed_hosts, frozenset)
+    assert allowed_origins == frozenset({"http://127.0.0.1:8765"})
+    assert allowed_hosts == frozenset({"localhost"})
+
+
+def test_origin_guard_init_accepts_empty_inputs_as_caller_responsibility() -> None:
+    """Empty inputs build an empty allowlist; Settings layer enforces non-empty."""
+
+    guard = OriginGuard(
+        _noop_app,
+        allowed_origins=(),
+        allowed_hosts=(),
+    )
+    assert guard._allowed_origins == frozenset()
+    assert guard._allowed_hosts == frozenset()
+
+
+# --- OriginGuard runtime hot path -------------------------------------------
+
+
+def _make_guard(
+    *,
+    allowed_origins: tuple[str, ...] = (
+        "http://127.0.0.1:8765",
+        "https://mcp.example.com",
+    ),
+    allowed_hosts: tuple[str, ...] = ("127.0.0.1", "localhost", "mcp.example.com"),
+    downstream: Any | None = None,
+) -> OriginGuard:
+    async def _noop(scope: dict[str, Any], receive: Any, send: Any) -> None:
+        del scope, receive, send
+
+    return OriginGuard(
+        downstream or _noop,
+        allowed_origins=allowed_origins,
+        allowed_hosts=allowed_hosts,
+    )
 
 
 @pytest.mark.parametrize(
@@ -333,45 +428,74 @@ def test_validate_origin_rejects_unlisted_origin_and_host(
         ("https://mcp.example.com", "mcp.example.com"),
     ],
 )
-def test_validate_origin_accepts_allowed_origins(
-    security_settings: Settings,
+@pytest.mark.asyncio
+async def test_origin_guard_accepts_allowlisted_requests(
     origin: str,
     host: str,
 ) -> None:
-    """Configured self-hosted and remote origins are both accepted."""
-
-    validate_origin(origin, host, security_settings)
-
-
-@pytest.mark.asyncio
-async def test_origin_guard_rejects_before_downstream_app(
-    security_settings: Settings,
-) -> None:
-    """Rejected requests never reach the wrapped ASGI app."""
+    """Allowlisted (origin, host) pairs pass through to the wrapped app."""
 
     called = False
 
     async def downstream(scope: dict[str, Any], receive: Any, send: Any) -> None:
-        del scope, receive, send
+        del scope, receive
         nonlocal called
         called = True
+        await send({"type": "http.response.start", "status": 204, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
 
-    guard = OriginGuard(downstream, security_settings)
+    guard = _make_guard(downstream=downstream)
+    messages = await _invoke(guard, _http_scope(origin, host))
+
+    assert called is True
+    assert messages[0]["status"] == 204
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [None, "null", "chrome-extension://abcd", "ftp://mcp.example.com"],
+)
+@pytest.mark.asyncio
+async def test_origin_guard_rejects_invalid_or_missing_origin(
+    origin: str | None,
+) -> None:
+    """Missing/null/non-HTTP request origins fail closed with 403."""
+
+    guard = _make_guard()
+    messages = await _invoke(guard, _http_scope(origin, "localhost:8765"))
+
+    assert messages[0]["status"] == 403
+
+
+@pytest.mark.asyncio
+async def test_origin_guard_rejects_unlisted_origin() -> None:
+    """Origins outside the precomputed set fail closed with 403."""
+
+    guard = _make_guard()
     messages = await _invoke(
         guard,
         _http_scope("https://evil.example.com", "localhost:8765"),
     )
 
-    assert called is False
     assert messages[0]["status"] == 403
-    assert messages[1]["body"] == b"Forbidden"
 
 
 @pytest.mark.asyncio
-async def test_origin_guard_rejects_missing_host_header(
-    security_settings: Settings,
-) -> None:
-    """Missing Host must fail closed instead of using the ASGI server bind."""
+async def test_origin_guard_rejects_unlisted_host() -> None:
+    """Hosts outside the precomputed set fail closed with 403."""
+
+    guard = _make_guard()
+    messages = await _invoke(
+        guard,
+        _http_scope("https://mcp.example.com", "evil.example.com"),
+    )
+
+    assert messages[0]["status"] == 403
+
+
+@pytest.mark.asyncio
+async def test_origin_guard_rejects_missing_host_header() -> None:
+    """Missing Host header fails closed instead of trusting the ASGI server bind."""
 
     called = False
 
@@ -380,7 +504,7 @@ async def test_origin_guard_rejects_missing_host_header(
         nonlocal called
         called = True
 
-    guard = OriginGuard(downstream, security_settings)
+    guard = _make_guard(downstream=downstream)
     scope = _http_scope("http://127.0.0.1:8765", None)
     scope["server"] = ("127.0.0.1", 8765)
     messages = await _invoke(guard, scope)
@@ -389,32 +513,5 @@ async def test_origin_guard_rejects_missing_host_header(
     assert messages[0]["status"] == 403
 
 
-@pytest.mark.asyncio
-async def test_origin_guard_allows_valid_request_to_pass_through(
-    security_settings: Settings,
-) -> None:
-    """Valid local requests pass through to the wrapped ASGI app."""
-
-    called = False
-
-    async def downstream(scope: dict[str, Any], receive: Any, send: Any) -> None:
-        del scope, receive
-        nonlocal called
-        called = True
-        await send(
-            {
-                "type": "http.response.start",
-                "status": 204,
-                "headers": [],
-            }
-        )
-        await send({"type": "http.response.body", "body": b""})
-
-    guard = OriginGuard(downstream, security_settings)
-    messages = await _invoke(
-        guard,
-        _http_scope("http://127.0.0.1:8765", "localhost:8765"),
-    )
-
-    assert called is True
-    assert messages[0]["status"] == 204
+async def _noop_app(scope: dict[str, Any], receive: Any, send: Any) -> None:
+    del scope, receive, send
