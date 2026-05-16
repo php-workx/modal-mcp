@@ -185,10 +185,10 @@ def test_codex_contract_server_args_template_contains_env_file_flag() -> None:
     assert args == CODEX_SERVER_ARGS_TEMPLATE
 
 
-def test_codex_contract_server_args_template_starts_with_run() -> None:
-    """server_args_template must begin with 'run' subcommand."""
+def test_codex_contract_server_args_template_starts_with_stdio() -> None:
+    """server_args_template must begin with 'stdio' subcommand."""
     args = CODEX_CONTRACT.server_args_template
-    assert args[0] == "run", "first arg must be the 'run' subcommand"
+    assert args[0] == "stdio", "first arg must be the 'stdio' subcommand"
 
 
 def test_codex_command_snippet_uses_absolute_env_file() -> None:
@@ -527,7 +527,7 @@ def test_codex_contract_generated_block_is_valid_toml() -> None:
     parsed = tomllib.loads(toml_block)
     server_table = parsed[CODEX_CONTRACT.top_level_key][CODEX_CONTRACT.server_name]
     assert server_table["command"] == CODEX_CONTRACT.server_command
-    assert server_table["args"][0] == "run"
+    assert server_table["args"][0] == "stdio"
     assert "--env-file" in server_table["args"]
     assert env_file in server_table["args"]
 
@@ -735,12 +735,12 @@ def test_format_config_snippet_custom_command() -> None:
     assert parsed[CODEX_TOP_LEVEL_KEY][CODEX_SERVER_NAME]["command"] == custom_cmd
 
 
-def test_format_config_snippet_args_start_with_run() -> None:
-    """The rendered args list must begin with the 'run' subcommand."""
+def test_format_config_snippet_args_start_with_stdio() -> None:
+    """The rendered args list must begin with the 'stdio' subcommand."""
     snippet = format_config_snippet()
     parsed = tomllib.loads(snippet)
     args = parsed[CODEX_TOP_LEVEL_KEY][CODEX_SERVER_NAME]["args"]
-    assert args[0] == "run"
+    assert args[0] == "stdio"
 
 
 def test_format_config_snippet_uses_correct_toml_key() -> None:

@@ -460,10 +460,44 @@ def run(settings: Settings | None = None) -> None:
     uvicorn.run(create_asgi_app(resolved_settings), host=host, port=port)
 
 
+def run_stdio(settings: Settings | None = None) -> None:
+    """Run the Modal MCP server over stdin/stdout (stdio transport).
+
+    Used by CLI clients such as Codex that spawn the server as a subprocess
+    and communicate via the MCP stdio transport rather than HTTP.  Auth and
+    the HTTP approval route are not applicable here; tool filtering and the
+    Modal adapter lifespan are preserved.
+    """
+
+    resolved_settings = settings or _settings_from_env()
+    configure_logging(resolved_settings)
+
+    @asynccontextmanager
+    async def lifespan(server: FastMCP[Any]) -> AsyncIterator[None]:
+        async with fastmcp_lifespan(server, settings=resolved_settings):
+            yield
+
+    mcp: FastMCP[Any] = FastMCP(
+        name="modal-mcp",
+        version="0.1.0",
+        lifespan=lifespan,
+    )
+    register_toolsets(mcp, resolved_settings)
+
+    disabled_toolsets = ALL_TOOLSETS - set(resolved_settings.modal_mcp_enabled_toolsets)
+    if disabled_toolsets:
+        mcp.disable(tags=set(disabled_toolsets))
+    if resolved_settings.modal_mcp_read_only:
+        mcp.disable(tags={"change", "expert"})
+
+    mcp.run(transport="stdio")
+
+
 __all__ = [
     "ALL_TOOLSETS",
     "create_asgi_app",
     "create_mcp",
     "fastmcp_lifespan",
     "run",
+    "run_stdio",
 ]

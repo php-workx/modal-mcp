@@ -24,6 +24,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to a .env file to load before starting the server.",
     )
 
+    # stdio subcommand
+    stdio_parser = subparsers.add_parser(
+        "stdio",
+        help="Start the MCP server using stdio transport (for CLI clients).",
+    )
+    stdio_parser.add_argument(
+        "--env-file",
+        metavar="PATH",
+        help="Path to a .env file to load before starting the server.",
+    )
+
     # setup subcommand
     setup_parser = subparsers.add_parser(
         "setup",
@@ -146,6 +157,26 @@ def _cmd_run(args: argparse.Namespace) -> int:
     from modal_mcp.server import run
 
     run()
+    return 0
+
+
+def _cmd_stdio(args: argparse.Namespace) -> int:
+    """Start the MCP server over stdin/stdout (stdio transport)."""
+    env_file: str | None = getattr(args, "env_file", None)
+    if env_file is not None:
+        from pathlib import Path
+
+        env_path = Path(env_file)
+        if env_path.is_file():
+            from dotenv import load_dotenv
+
+            load_dotenv(str(env_path), override=False)
+        else:
+            print(f"warn: env file not found: {env_path}", file=sys.stderr)
+
+    from modal_mcp.server import run_stdio
+
+    run_stdio()
     return 0
 
 
@@ -344,6 +375,7 @@ def _cmd_print_agent_config(args: argparse.Namespace) -> int:
 _HANDLERS: dict[str | None, Callable[[argparse.Namespace], int]] = {
     None: _cmd_run,
     "run": _cmd_run,
+    "stdio": _cmd_stdio,
     "setup": _cmd_setup,
     "doctor": _cmd_doctor,
     "print-agent-config": _cmd_print_agent_config,

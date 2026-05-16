@@ -31,7 +31,7 @@ Install contract summary
        valid on Windows (NTFS/FAT32 forbid ``:``) as well as macOS and Linux.
    * - Cwd / env-file strategy
      - ``absolute_path_flag``: the install merges
-       ``args = ["run", "--env-file", "<absolute-path>"]`` so that Codex can
+       ``args = ["stdio", "--env-file", "<absolute-path>"]`` so that Codex can
        find the ``.env`` file regardless of the working directory at launch.
    * - Refusal conditions
      - Nine conditions listed in :data:`CODEX_CONTRACT`.
@@ -46,7 +46,7 @@ The installer merges the following entry under the ``mcp_servers`` key::
 
     [mcp_servers.modal-mcp]
     command = "modal-mcp"
-    args = ["run", "--env-file", "/absolute/path/to/.env"]
+    args = ["stdio", "--env-file", "/absolute/path/to/.env"]
 
 If ``mcp_servers`` does not yet exist it is created.  If an identically-keyed
 entry already contains the correct ``command`` and ``args`` the install is a
@@ -110,7 +110,11 @@ CODEX_SERVER_COMMAND: Final[str] = "modal-mcp"
 #: Argument list template for stdio launch.
 #: ``{env_file}`` must be replaced with the *absolute* path to the ``.env``
 #: file at install time.
-CODEX_SERVER_ARGS_TEMPLATE: Final[tuple[str, ...]] = ("run", "--env-file", "{env_file}")
+CODEX_SERVER_ARGS_TEMPLATE: Final[tuple[str, ...]] = (
+    "stdio",
+    "--env-file",
+    "{env_file}",
+)
 
 #: Backup filename suffix template.  ``{timestamp}`` is substituted with a
 #: filesystem-safe compact UTC datetime at write time, e.g.
@@ -197,12 +201,12 @@ def build_contract(command: str = CODEX_SERVER_COMMAND) -> AgentTargetContract:
         parse_validation_strategy=(
             "after writing, reload the file with tomllib.loads; "
             "assert the result is a table that contains mcp_servers.modal-mcp "
-            f"with command='{command}' and args starting with 'run'; "
+            f"with command='{command}' and args starting with 'stdio'; "
             "restore backup and raise if validation fails"
         ),
         dry_run_description=(
             f"would add [mcp_servers.modal-mcp] "
-            f"(command: {command}, args: run --env-file <absolute-path>) "
+            f"(command: {command}, args: stdio --env-file <absolute-path>) "
             "to ~/.codex/config.toml"
         ),
         idempotency_key=CODEX_IDEMPOTENCY_KEY,
