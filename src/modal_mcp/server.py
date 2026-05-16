@@ -429,6 +429,16 @@ def create_asgi_app(
         audit_sink=audit_sink,
         _skip_security_check=True,
     )
+    # Validate origin/host allowlists eagerly so configuration mistakes raise
+    # ConfigError at startup instead of surfacing as silent per-request 403s.
+    # Starlette instantiates Middleware lazily on first request, so we must
+    # exercise OriginGuard's construction-time validation here ourselves.
+    OriginGuard._build_allowed_set(
+        resolved_settings.modal_mcp_allowed_origins, kind="origin"
+    )
+    OriginGuard._build_allowed_set(
+        resolved_settings.modal_mcp_allowed_hosts, kind="host"
+    )
     middleware = [
         Middleware(
             OriginGuard,

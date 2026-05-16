@@ -122,9 +122,7 @@ class OriginGuard:
         allowed_hosts: Sequence[str],
     ) -> None:
         self._app = app
-        self._allowed_origins = self._build_allowed_set(
-            allowed_origins, kind="origin"
-        )
+        self._allowed_origins = self._build_allowed_set(allowed_origins, kind="origin")
         self._allowed_hosts = self._build_allowed_set(allowed_hosts, kind="host")
 
     @staticmethod
@@ -133,10 +131,11 @@ class OriginGuard:
         *,
         kind: str,
     ) -> frozenset[str]:
-        """Normalise and validate ``entries`` once; raise :class:`ConfigError` on bad input.
+        """Normalise and validate ``entries`` once at construction.
 
-        ``kind`` is ``"origin"`` or ``"host"`` and selects which normaliser and
-        which env-var name to mention in the error message.
+        Raises :class:`ConfigError` on any bad input. ``kind`` is ``"origin"``
+        or ``"host"`` and selects which normaliser and which env-var name to
+        mention in the error message.
         """
 
         normalise = _NORMALIZERS[kind]

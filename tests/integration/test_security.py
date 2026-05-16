@@ -516,3 +516,24 @@ async def test_origin_guard_rejects_missing_host_header() -> None:
 
 async def _noop_app(scope: dict[str, Any], receive: Any, send: Any) -> None:
     del scope, receive, send
+
+
+def test_create_asgi_app_fails_loudly_on_malformed_allowed_origin(
+    tmp_path: Path,
+) -> None:
+    """A bad MODAL_MCP_ALLOWED_ORIGINS entry must fail at startup, not per request."""
+
+    modal_config = tmp_path / "modal.toml"
+    modal_config.write_text("[default]\n", encoding="utf-8")
+    settings = Settings(
+        modal_config_path=modal_config,
+        modal_mcp_allowed_origins=(
+            "http://127.0.0.1:8765",
+            "ftp://bad.example.com",  # malformed: non-http scheme
+        ),
+        modal_mcp_allowed_hosts=("127.0.0.1",),
+        modal_mcp_signing_keys=SecretStr("kid1:" + "a" * 64),
+    )
+
+    with pytest.raises(ConfigError, match=r"ftp://bad\.example\.com"):
+        create_asgi_app(settings)
