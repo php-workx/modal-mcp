@@ -699,7 +699,7 @@ def test_setup_install_codex_absolute_env_file_passes_path_guard(
     abs_env = tmp_path / "test.env"
 
     with patch(
-        "modal_mcp.agent_config.install_codex_config", return_value="dry_run"
+        "modal_mcp.agent_targets.codex.install", return_value="dry_run"
     ) as mock_install:
         result = main(
             ["setup", "--install", "codex", "--env-file", str(abs_env), "--dry-run"]
