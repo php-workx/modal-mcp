@@ -23,6 +23,10 @@ def _registered_subcommand_names() -> set[str]:
     """Return the set of subcommand names registered on the modal-mcp parser."""
     parser = build_parser()
     names: set[str] = set()
+    # ``argparse`` does not expose a public API for introspecting registered
+    # subparsers, so this test deliberately reads the private ``_actions``
+    # list.  Stable since Python 2.7; if a future argparse rewrite breaks
+    # this, the test will fail loudly rather than silently miss subcommands.
     for action in parser._actions:
         if isinstance(action, argparse._SubParsersAction):
             names.update(action.choices.keys())

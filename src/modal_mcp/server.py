@@ -465,31 +465,24 @@ def run_stdio(settings: Settings | None = None) -> None:
 
     Used by CLI clients such as Codex that spawn the server as a subprocess
     and communicate via the MCP stdio transport rather than HTTP.  Auth and
-    the HTTP approval route are not applicable here; tool filtering and the
-    Modal adapter lifespan are preserved.
+    the HTTP approval route are not applicable here; everything else that
+    ``create_mcp`` composes (``assert_runtime_security``, ``PolicyMiddleware``,
+    ``OtelMiddleware``, redaction, rate limiting, mutation gating, the
+    audit sink, the adapter lifespan, tool filtering, and the read-only
+    posture) MUST stay wired or stdio launches will ship a silent security
+    regression versus the HTTP transport.
+
+    Implementation note: this reuses ``create_mcp`` directly rather than
+    rebuilding a fresh ``FastMCP`` so the two transports cannot drift on
+    middleware, toolset gating, or runtime-security checks.  ``scrub_secret_env``
+    is invoked here for parity with ``create_asgi_app`` — both transports
+    should clear sensitive env vars from the process before the server begins
+    accepting requests.
     """
 
     resolved_settings = settings or _settings_from_env()
-    configure_logging(resolved_settings)
-
-    @asynccontextmanager
-    async def lifespan(server: FastMCP[Any]) -> AsyncIterator[None]:
-        async with fastmcp_lifespan(server, settings=resolved_settings):
-            yield
-
-    mcp: FastMCP[Any] = FastMCP(
-        name="modal-mcp",
-        version="0.1.0",
-        lifespan=lifespan,
-    )
-    register_toolsets(mcp, resolved_settings)
-
-    disabled_toolsets = ALL_TOOLSETS - set(resolved_settings.modal_mcp_enabled_toolsets)
-    if disabled_toolsets:
-        mcp.disable(tags=set(disabled_toolsets))
-    if resolved_settings.modal_mcp_read_only:
-        mcp.disable(tags={"change", "expert"})
-
+    scrub_secret_env()
+    mcp = create_mcp(resolved_settings)
     mcp.run(transport="stdio")
 
 

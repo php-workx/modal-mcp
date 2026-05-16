@@ -140,19 +140,33 @@ def build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 
 
+def _load_env_file(env_file: str | None) -> None:
+    """Load a dotenv file into ``os.environ`` if the path exists.
+
+    Both ``_cmd_run`` and ``_cmd_stdio`` need the same load-or-warn semantics
+    (don't overwrite existing env vars, warn instead of failing on a missing
+    file). Extracted so the two transports cannot drift on env handling.
+    """
+    if env_file is None:
+        return
+    from pathlib import Path
+
+    env_path = Path(env_file)
+    if env_path.is_file():
+        from dotenv import load_dotenv
+
+        load_dotenv(str(env_path), override=False)
+    else:
+        print(f"warn: env file not found: {env_path}", file=sys.stderr)
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     """Start the MCP server, optionally loading an env file first."""
-    env_file: str | None = getattr(args, "env_file", None)
-    if env_file is not None:
-        from pathlib import Path
-
-        env_path = Path(env_file)
-        if env_path.is_file():
-            from dotenv import load_dotenv
-
-            load_dotenv(str(env_path), override=False)
-        else:
-            print(f"warn: env file not found: {env_path}", file=sys.stderr)
+    # ``getattr`` (not direct attribute access) is required here because
+    # ``_cmd_run`` is also the fallback handler for ``main([])`` (no
+    # subcommand), which produces ``Namespace(subcommand=None)`` with no
+    # ``env_file`` attribute set by argparse.
+    _load_env_file(getattr(args, "env_file", None))
 
     from modal_mcp.server import run
 
@@ -162,17 +176,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
 def _cmd_stdio(args: argparse.Namespace) -> int:
     """Start the MCP server over stdin/stdout (stdio transport)."""
-    env_file: str | None = getattr(args, "env_file", None)
-    if env_file is not None:
-        from pathlib import Path
-
-        env_path = Path(env_file)
-        if env_path.is_file():
-            from dotenv import load_dotenv
-
-            load_dotenv(str(env_path), override=False)
-        else:
-            print(f"warn: env file not found: {env_path}", file=sys.stderr)
+    _load_env_file(args.env_file)
 
     from modal_mcp.server import run_stdio
 
