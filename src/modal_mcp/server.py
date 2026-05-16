@@ -76,7 +76,8 @@ async def _default_adapter_factory(settings: Settings) -> ModalSdkAdapter:
 
     creds = CredentialSource.resolve(settings)
     rpc = await ModalRpcClient.from_credentials(creds)
-    if settings.modal_mcp_signing_keys is None:  # pragma: no cover - guarded by Settings
+    if settings.modal_mcp_signing_keys is None:
+        # Settings validation guards this; the check is here for type-narrowing.
         msg = "MODAL_MCP_SIGNING_KEYS is required to build RefCodec"
         raise ModalAdapterError(ErrorCode.INTERNAL_DRIFT, msg)
     ref_codec = RefCodec(

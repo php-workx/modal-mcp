@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+from pydantic import SecretStr
+
+from modal_mcp.adapters.credentials import CredentialError
+from modal_mcp.config import Settings
 from modal_mcp.policy.engine import PolicyMiddleware
-from modal_mcp.server import run
+from modal_mcp.server import create_mcp, run
 
 
 def test_run_uses_configured_bind_and_asgi_app() -> None:
@@ -147,3 +153,27 @@ def test_run_stdio_wires_policy_middleware_into_fastmcp_stack(
         "stdio transport MUST have PolicyMiddleware on its middleware stack; "
         f"got {[type(m).__name__ for m in middleware]!r}"
     )
+
+
+def test_create_mcp_surfaces_credential_error_before_lifespan(
+    tmp_path: Path,
+) -> None:
+    """Missing Modal credentials raise CredentialError synchronously.
+
+    The eager CredentialSource.resolve call in create_mcp must catch
+    misconfiguration before any FastMCP lifespan starts.  Settings
+    construction requires the modal.toml file to exist, so we build
+    Settings with a placeholder and then delete the file to force the
+    post-Settings resolution path into failure.
+    """
+    config_path = tmp_path / "modal.toml"
+    config_path.write_text("[default]\n", encoding="utf-8")
+    settings = Settings(
+        modal_config_path=config_path,
+        modal_mcp_allowed_origins=("http://127.0.0.1:8765",),
+        modal_mcp_signing_keys=SecretStr("kid1:" + "a" * 64),
+    )
+    config_path.unlink()
+
+    with pytest.raises(CredentialError):
+        create_mcp(settings, _skip_security_check=True)

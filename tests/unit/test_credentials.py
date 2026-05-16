@@ -56,8 +56,10 @@ def _creds(**overrides: object) -> ModalCredentials:
 
 class TestModalCredentials:
     def test_is_frozen(self) -> None:
+        from dataclasses import FrozenInstanceError
+
         creds = _creds()
-        with pytest.raises(Exception):  # FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
             creds.source = "toml"  # type: ignore[misc]
 
     def test_repr_does_not_leak_secret(self) -> None:
@@ -86,9 +88,7 @@ class TestModalCredentials:
 
 class TestCredentialSourceResolveEnv:
     def test_env_pair_takes_priority(self, tmp_path: Path) -> None:
-        settings = _settings(
-            tmp_path, token_id="ak-env", token_secret="as-env"
-        )
+        settings = _settings(tmp_path, token_id="ak-env", token_secret="as-env")
         creds = CredentialSource.resolve(settings)
         assert creds.source == "env"
         assert creds.profile is None
@@ -98,11 +98,7 @@ class TestCredentialSourceResolveEnv:
 
 class TestCredentialSourceResolveToml:
     def test_toml_fallback_when_no_env_tokens(self, tmp_path: Path) -> None:
-        toml_text = (
-            "[default]\n"
-            'token_id = "ak-toml"\n'
-            'token_secret = "as-toml"\n'
-        )
+        toml_text = '[default]\ntoken_id = "ak-toml"\ntoken_secret = "as-toml"\n'
         settings = _settings(tmp_path, modal_config_text=toml_text)
         creds = CredentialSource.resolve(settings)
         assert creds.source == "toml"
@@ -119,9 +115,7 @@ class TestCredentialSourceResolveToml:
             'token_id = "ak-staging"\n'
             'token_secret = "as-staging"\n'
         )
-        settings = _settings(
-            tmp_path, modal_config_text=toml_text, profile="staging"
-        )
+        settings = _settings(tmp_path, modal_config_text=toml_text, profile="staging")
         creds = CredentialSource.resolve(settings)
         assert creds.source == "toml"
         assert creds.profile == "staging"
@@ -151,9 +145,7 @@ class TestCredentialSourceFailureModes:
 
     def test_toml_profile_not_found_raises(self, tmp_path: Path) -> None:
         toml_text = '[default]\ntoken_id = "x"\ntoken_secret = "y"\n'
-        settings = _settings(
-            tmp_path, modal_config_text=toml_text, profile="missing"
-        )
+        settings = _settings(tmp_path, modal_config_text=toml_text, profile="missing")
         with pytest.raises(CredentialError, match="profile 'missing'"):
             CredentialSource.resolve(settings)
 

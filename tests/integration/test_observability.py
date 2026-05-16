@@ -193,6 +193,8 @@ def _settings(tmp_path: Path) -> Settings:
     modal_config.write_text("[default]\n", encoding="utf-8")
     return Settings(
         modal_config_path=modal_config,
+        modal_token_id=SecretStr("ak-id"),
+        modal_token_secret=SecretStr("ak-secret"),
         modal_environment="prod",
         modal_mcp_allowed_origins=("http://127.0.0.1:8765",),
         modal_mcp_signing_keys=SecretStr("kid1:" + "e" * 64),

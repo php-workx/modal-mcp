@@ -317,10 +317,10 @@ async def test_modal_rpc_client_from_credentials_uses_from_credentials_aio(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """ModalRpcClient.from_credentials calls modal.Client.from_credentials.aio."""
+    import modal
+
     from modal_mcp.adapters.credentials import ModalCredentials
     from modal_mcp.adapters.modal_adapter import ModalRpcClient
-
-    import modal
 
     factory = FakeModalFactory(FakeClient(FakeStub()))
     monkeypatch.setattr(modal.Client, "from_credentials", factory)
@@ -344,10 +344,10 @@ async def test_modal_rpc_client_from_credentials_validates_auth(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """ModalRpcClient.from_credentials runs a WorkspaceNameLookup ping."""
+    import modal
+
     from modal_mcp.adapters.credentials import ModalCredentials
     from modal_mcp.adapters.modal_adapter import ModalRpcClient
-
-    import modal
 
     stub = FakeStub()
     monkeypatch.setattr(

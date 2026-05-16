@@ -21,6 +21,8 @@ def test_create_mcp_raises_config_error_when_signing_keys_missing(
     modal_config.write_text("[default]\n", encoding="utf-8")
     settings = Settings(
         modal_config_path=modal_config,
+        modal_token_id=SecretStr("ak-id"),
+        modal_token_secret=SecretStr("ak-secret"),
         modal_mcp_allowed_origins=("http://127.0.0.1:8765",),
         modal_mcp_allowed_hosts=("127.0.0.1", "localhost"),
         modal_mcp_signing_keys=SecretStr("kid1:" + "a" * 64),

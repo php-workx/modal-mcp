@@ -759,9 +759,7 @@ def run_doctor(
         elif cred.source == "env_file":
             message = f"Modal credentials loaded from .env file: {cred.detail}"
         elif cred.source == "file_backed":
-            message = (
-                f"Modal credentials loaded from file-backed tokens: {cred.detail}"
-            )
+            message = f"Modal credentials loaded from file-backed tokens: {cred.detail}"
         elif cred.source == "modal_toml":
             message = (
                 f"Modal credentials loaded from {cred.detail} "
@@ -769,9 +767,7 @@ def run_doctor(
             )
         else:
             message = f"Modal credentials found ({cred.source}): {cred.detail}"
-        report.items.append(
-            DiagnosticItem("credentials", CheckStatus.OK, message)
-        )
+        report.items.append(DiagnosticItem("credentials", CheckStatus.OK, message))
     else:
         report.items.append(
             DiagnosticItem(

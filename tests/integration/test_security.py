@@ -527,6 +527,8 @@ def test_create_asgi_app_fails_loudly_on_malformed_allowed_origin(
     modal_config.write_text("[default]\n", encoding="utf-8")
     settings = Settings(
         modal_config_path=modal_config,
+        modal_token_id=SecretStr("ak-id"),
+        modal_token_secret=SecretStr("ak-secret"),
         modal_mcp_allowed_origins=(
             "http://127.0.0.1:8765",
             "ftp://bad.example.com",  # malformed: non-http scheme
