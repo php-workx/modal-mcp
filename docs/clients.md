@@ -51,7 +51,7 @@ checkout), use the absolute executable path or wrap with `uv run`:
 {
   "mcpServers": {
     "modal-mcp": {
-      "command": "/Users/runger/workspaces/modal-mcp/.venv/bin/modal-mcp",
+      "command": "/absolute/path/to/project/.venv/bin/modal-mcp",
       "args": ["run", "--env-file", "/absolute/path/to/project/.env"]
     }
   }

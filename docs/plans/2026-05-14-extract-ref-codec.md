@@ -189,7 +189,7 @@ Expected output contains: `ImportError: cannot import name 'RefCodec'`
 
 ## Step 2 — Implement RefCodec in domain/refs.py
 
-- [ ] Add the `RefCodec` class to `/Users/runger/workspaces/modal-mcp/src/modal_mcp/domain/refs.py`, immediately after the `decode_ref` function (before `encode_cursor`). Insert this block:
+- [ ] Add the `RefCodec` class to `src/modal_mcp/domain/refs.py`, immediately after the `decode_ref` function (before `encode_cursor`). Insert this block:
 
 ```python
 class RefCodec:
@@ -292,7 +292,7 @@ After this step:
 
 ### 3a — Add import and remove old helper
 
-- [ ] In `/Users/runger/workspaces/modal-mcp/src/modal_mcp/adapters/modal_adapter.py`:
+- [ ] In `src/modal_mcp/adapters/modal_adapter.py`:
 
   Replace:
 
@@ -426,7 +426,7 @@ After this step:
 - [ ] Confirm no outside module references the old `_parse_signing_keys` function:
 
   ```bash
-  grep -rn "_parse_signing_keys" /Users/runger/workspaces/modal-mcp/src/
+  grep -rn "_parse_signing_keys" src/
   ```
 
   Expected: no output.
@@ -434,7 +434,7 @@ After this step:
 - [ ] Confirm no outside module passes raw `signing_keys` to `encode_ref` or `decode_ref` (outside of `refs.py` and `normalize.py` itself):
 
   ```bash
-  grep -rn "encode_ref\|decode_ref" /Users/runger/workspaces/modal-mcp/src/ \
+  grep -rn "encode_ref\|decode_ref" src/ \
     | grep -v "domain/refs.py" \
     | grep -v "domain/normalize.py"
   ```
@@ -444,7 +444,7 @@ After this step:
 - [ ] Confirm test files still only use `SIGNING_KEYS` constant in their own scope (not passing it to adapter internals):
 
   ```bash
-  grep -n "signing_keys" /Users/runger/workspaces/modal-mcp/tests/unit/test_modal_adapter.py
+  grep -n "signing_keys" tests/unit/test_modal_adapter.py
   ```
 
   Expected: no matches (the adapter tests use `SIGNING_KEY_TEXT` in `Settings`, not raw tuples injected into the adapter).

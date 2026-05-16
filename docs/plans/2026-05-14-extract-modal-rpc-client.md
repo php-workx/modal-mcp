@@ -52,7 +52,7 @@ async def test_modal_rpc_client_call_retries_once(modal_config_path: Path) -> No
 - [ ] **1.2** Run the test and confirm it fails with `ImportError` (class does not exist yet):
 
 ```bash
-cd /Users/runger/workspaces/modal-mcp && uv run pytest tests/unit/test_modal_adapter.py::test_modal_rpc_client_call_retries_once -x 2>&1 | tail -20
+cd "$(git rev-parse --show-toplevel)" && uv run pytest tests/unit/test_modal_adapter.py::test_modal_rpc_client_call_retries_once -x 2>&1 | tail -20
 ```
 
 Expected: `ImportError: cannot import name 'ModalRpcClient'`
@@ -372,7 +372,7 @@ async def aclose(self) -> None:
 - [ ] **4.1** Run the new isolated test:
 
 ```bash
-cd /Users/runger/workspaces/modal-mcp && uv run pytest tests/unit/test_modal_adapter.py::test_modal_rpc_client_call_retries_once -x -v 2>&1 | tail -20
+cd "$(git rev-parse --show-toplevel)" && uv run pytest tests/unit/test_modal_adapter.py::test_modal_rpc_client_call_retries_once -x -v 2>&1 | tail -20
 ```
 
 Expected: `PASSED`
@@ -384,7 +384,7 @@ Expected: `PASSED`
 - [ ] **5.1** Run the full adapter test module:
 
 ```bash
-cd /Users/runger/workspaces/modal-mcp && uv run pytest tests/unit/test_modal_adapter.py -v 2>&1 | tail -30
+cd "$(git rev-parse --show-toplevel)" && uv run pytest tests/unit/test_modal_adapter.py -v 2>&1 | tail -30
 ```
 
 Expected: all tests `PASSED`, no failures.
@@ -403,7 +403,7 @@ Key tests to confirm pass without any source change to the test file:
 - [ ] **6.1** Run ruff to confirm zero new warnings:
 
 ```bash
-cd /Users/runger/workspaces/modal-mcp && uv run ruff check src/modal_mcp/adapters/modal_adapter.py tests/unit/test_modal_adapter.py 2>&1
+cd "$(git rev-parse --show-toplevel)" && uv run ruff check src/modal_mcp/adapters/modal_adapter.py tests/unit/test_modal_adapter.py 2>&1
 ```
 
 Expected: clean exit (no output).
@@ -415,7 +415,7 @@ Expected: clean exit (no output).
 - [ ] **7.1** Run the complete test suite:
 
 ```bash
-cd /Users/runger/workspaces/modal-mcp && uv run pytest 2>&1 | tail -20
+cd "$(git rev-parse --show-toplevel)" && uv run pytest 2>&1 | tail -20
 ```
 
 Expected: all tests pass.
@@ -427,7 +427,7 @@ Expected: all tests pass.
 - [ ] **8.1** Stage and commit the two changed files:
 
 ```bash
-cd /Users/runger/workspaces/modal-mcp && git add src/modal_mcp/adapters/modal_adapter.py tests/unit/test_modal_adapter.py && git commit -m "$(cat <<'EOF'
+cd "$(git rev-parse --show-toplevel)" && git add src/modal_mcp/adapters/modal_adapter.py tests/unit/test_modal_adapter.py && git commit -m "$(cat <<'EOF'
 refactor(adapter): extract ModalRpcClient to own transport/reconnect
 
 Separates three concerns previously conflated in ModalSdkAdapter:
