@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,7 @@ from modal_mcp.policy.approval import (
     ApprovalTokenLedger,
     approve_http_request,
 )
+from modal_mcp.policy.context import PolicyContext
 from modal_mcp.policy.engine import PolicyMiddleware
 from modal_mcp.policy.rate_limit import TokenBucketRateLimiter, rate_limit_key
 from modal_mcp.policy.rules import (
@@ -99,6 +101,23 @@ def policy_settings(tmp_path: Path) -> Settings:
         modal_mcp_read_only=False,
         modal_mcp_enabled_toolsets=READ_ONLY_TOOLSETS | CHANGE_TOOLSETS,
         modal_mcp_mutation_rate_limit_seconds=0,
+    )
+
+
+@pytest.fixture
+def policy_context(policy_settings: Settings) -> PolicyContext:
+    """PolicyContext built from policy_settings with a fixed actor resolver.
+
+    Tests that need a deterministic actor identity reuse this fixture; tests
+    that need a non-standard component (e.g. a custom rate limiter or a
+    fixed-time `now`) build a small override via dataclasses.replace.
+    """
+
+    base = PolicyContext.from_settings(policy_settings)
+    return replace(
+        base,
+        actor_resolver=lambda _: ApprovalActor("alice", "auth-1"),
+        now=lambda: 1_006,
     )
 
 
@@ -290,15 +309,12 @@ def test_initialize_without_identity_is_remote_address_capped() -> None:
 @pytest.mark.asyncio
 async def test_classify_tool_read_only_annotation(
     annotation_mcp: FastMCP[Any],
+    policy_context: PolicyContext,
     policy_settings: Settings,
 ) -> None:
     """classify_tool returns non-mutating for tools with readOnlyHint=True."""
 
-    middleware = PolicyMiddleware(
-        annotation_mcp,
-        policy_settings,
-        actor_resolver=lambda _: ApprovalActor("alice", "auth-1"),
-    )
+    middleware = PolicyMiddleware(annotation_mcp, policy_context, policy_settings)
     tool_policy = await middleware.classify_tool("test_read")
 
     assert tool_policy.tool_name == "test_read"
@@ -309,15 +325,12 @@ async def test_classify_tool_read_only_annotation(
 @pytest.mark.asyncio
 async def test_classify_tool_non_destructive_write(
     annotation_mcp: FastMCP[Any],
+    policy_context: PolicyContext,
     policy_settings: Settings,
 ) -> None:
     """classify_tool returns non-mutating when destructiveHint is False."""
 
-    middleware = PolicyMiddleware(
-        annotation_mcp,
-        policy_settings,
-        actor_resolver=lambda _: ApprovalActor("alice", "auth-1"),
-    )
+    middleware = PolicyMiddleware(annotation_mcp, policy_context, policy_settings)
     tool_policy = await middleware.classify_tool("test_write")
 
     assert tool_policy.tool_name == "test_write"
@@ -328,15 +341,12 @@ async def test_classify_tool_non_destructive_write(
 @pytest.mark.asyncio
 async def test_classify_tool_destructive_annotation(
     annotation_mcp: FastMCP[Any],
+    policy_context: PolicyContext,
     policy_settings: Settings,
 ) -> None:
     """classify_tool returns mutating for tools with destructiveHint=True."""
 
-    middleware = PolicyMiddleware(
-        annotation_mcp,
-        policy_settings,
-        actor_resolver=lambda _: ApprovalActor("alice", "auth-1"),
-    )
+    middleware = PolicyMiddleware(annotation_mcp, policy_context, policy_settings)
     tool_policy = await middleware.classify_tool("test_dangerous")
 
     assert tool_policy.tool_name == "test_dangerous"
@@ -347,15 +357,12 @@ async def test_classify_tool_destructive_annotation(
 @pytest.mark.asyncio
 async def test_classify_tool_no_annotations_uses_fallback(
     annotation_mcp: FastMCP[Any],
+    policy_context: PolicyContext,
     policy_settings: Settings,
 ) -> None:
     """classify_tool falls back to non-mutating for tools without annotations."""
 
-    middleware = PolicyMiddleware(
-        annotation_mcp,
-        policy_settings,
-        actor_resolver=lambda _: ApprovalActor("alice", "auth-1"),
-    )
+    middleware = PolicyMiddleware(annotation_mcp, policy_context, policy_settings)
     tool_policy = await middleware.classify_tool("test_no_annotations")
 
     assert tool_policy.tool_name == "test_no_annotations"
@@ -366,15 +373,12 @@ async def test_classify_tool_no_annotations_uses_fallback(
 @pytest.mark.asyncio
 async def test_classify_tool_unknown_tool_uses_mutating_tools_fallback(
     annotation_mcp: FastMCP[Any],
+    policy_context: PolicyContext,
     policy_settings: Settings,
 ) -> None:
     """classify_tool falls back to MUTATING_TOOLS for tools not in the registry."""
 
-    middleware = PolicyMiddleware(
-        annotation_mcp,
-        policy_settings,
-        actor_resolver=lambda _: ApprovalActor("alice", "auth-1"),
-    )
+    middleware = PolicyMiddleware(annotation_mcp, policy_context, policy_settings)
     # modal_stop_app is in MUTATING_TOOLS but not registered in annotation_mcp
     policy = await middleware.classify_tool("modal_stop_app")
     assert policy.mutating is True
@@ -388,6 +392,7 @@ async def test_classify_tool_unknown_tool_uses_mutating_tools_fallback(
 
 @pytest.mark.asyncio
 async def test_classify_tool_prefers_change_toolset_over_read_only_tag(
+    policy_context: PolicyContext,
     policy_settings: Settings,
 ) -> None:
     """classify_tool picks a change-category tag over read-only tags when both exist."""
@@ -402,11 +407,7 @@ async def test_classify_tool_prefers_change_toolset_over_read_only_tag(
     def test_multi() -> str:
         return "ok"
 
-    middleware = PolicyMiddleware(
-        mcp,
-        policy_settings,
-        actor_resolver=lambda _: ApprovalActor("alice", "auth-1"),
-    )
+    middleware = PolicyMiddleware(mcp, policy_context, policy_settings)
     tool_policy = await middleware.classify_tool("test_multi")
 
     assert tool_policy.toolset == "change"
@@ -640,6 +641,7 @@ async def test_approve_http_request_rejects_invalid_approval_context(
 @pytest.mark.asyncio
 async def test_policy_middleware_consumes_approval_strips_token_and_redacts(
     monkeypatch: pytest.MonkeyPatch,
+    policy_context: PolicyContext,
     policy_settings: Settings,
     middleware_mcp: FastMCP[Any],
 ) -> None:
@@ -651,13 +653,13 @@ async def test_policy_middleware_consumes_approval_strips_token_and_redacts(
     actor = ApprovalActor("alice", "auth-1")
     ledger = ApprovalTokenLedger(now=lambda: 1_006)
     await ledger.approve(token, payload, actor)
-    middleware = PolicyMiddleware(
-        middleware_mcp,
-        policy_settings,
+    ctx = replace(
+        policy_context,
         approval_ledger=ledger,
         actor_resolver=lambda _: actor,
         now=lambda: 1_006,
     )
+    middleware = PolicyMiddleware(middleware_mcp, ctx, policy_settings)
     context = MiddlewareContext(
         message=mt.CallToolRequestParams(
             name="modal_stop_app",
@@ -696,19 +698,20 @@ async def test_policy_middleware_consumes_approval_strips_token_and_redacts(
 
 @pytest.mark.asyncio
 async def test_policy_middleware_forwards_normalized_dry_run(
+    policy_context: PolicyContext,
     policy_settings: Settings,
     middleware_mcp: FastMCP[Any],
 ) -> None:
     """Mutating calls without dry_run are forwarded as explicit dry runs."""
 
     actor = ApprovalActor("alice", "auth-1")
-    middleware = PolicyMiddleware(
-        middleware_mcp,
-        policy_settings,
+    ctx = replace(
+        policy_context,
         approval_ledger=ApprovalTokenLedger(now=lambda: 1_006),
         actor_resolver=lambda _: actor,
         now=lambda: 1_006,
     )
+    middleware = PolicyMiddleware(middleware_mcp, ctx, policy_settings)
     context = MiddlewareContext(
         message=mt.CallToolRequestParams(
             name="modal_stop_app",
@@ -732,6 +735,7 @@ async def test_policy_middleware_forwards_normalized_dry_run(
 @pytest.mark.asyncio
 async def test_policy_middleware_consumes_approval_after_signing_env_scrub(
     monkeypatch: pytest.MonkeyPatch,
+    policy_context: PolicyContext,
     policy_settings: Settings,
     middleware_mcp: FastMCP[Any],
 ) -> None:
@@ -743,13 +747,13 @@ async def test_policy_middleware_consumes_approval_after_signing_env_scrub(
     actor = ApprovalActor("alice", "auth-1")
     ledger = ApprovalTokenLedger(now=lambda: 1_006)
     await ledger.approve(token, payload, actor)
-    middleware = PolicyMiddleware(
-        middleware_mcp,
-        policy_settings,
+    ctx = replace(
+        policy_context,
         approval_ledger=ledger,
         actor_resolver=lambda _: actor,
         now=lambda: 1_006,
     )
+    middleware = PolicyMiddleware(middleware_mcp, ctx, policy_settings)
     context = MiddlewareContext(
         message=mt.CallToolRequestParams(
             name="modal_stop_app",
@@ -777,6 +781,7 @@ async def test_policy_middleware_consumes_approval_after_signing_env_scrub(
 @pytest.mark.asyncio
 async def test_policy_middleware_blocks_unapproved_mutation(
     monkeypatch: pytest.MonkeyPatch,
+    policy_context: PolicyContext,
     policy_settings: Settings,
     middleware_mcp: FastMCP[Any],
 ) -> None:
@@ -786,13 +791,13 @@ async def test_policy_middleware_blocks_unapproved_mutation(
     payload = _approval_payload()
     token = encode_approval(payload)
     actor = ApprovalActor("alice", "auth-1")
-    middleware = PolicyMiddleware(
-        middleware_mcp,
-        policy_settings,
+    ctx = replace(
+        policy_context,
         approval_ledger=ApprovalTokenLedger(now=lambda: 1_006),
         actor_resolver=lambda _: actor,
         now=lambda: 1_006,
     )
+    middleware = PolicyMiddleware(middleware_mcp, ctx, policy_settings)
     context = MiddlewareContext(
         message=mt.CallToolRequestParams(
             name="modal_stop_app",
