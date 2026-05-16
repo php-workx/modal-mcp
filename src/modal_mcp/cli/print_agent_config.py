@@ -14,7 +14,9 @@ class PrintAgentConfigCommand:
     name: ClassVar[str] = "print-agent-config"
 
     @classmethod
-    def register(cls, subparsers: argparse._SubParsersAction) -> None:
+    def register(
+        cls, subparsers: argparse._SubParsersAction[argparse.ArgumentParser]
+    ) -> None:
         parser = subparsers.add_parser(
             cls.name,
             help="Print the agent client configuration block.",

@@ -14,7 +14,9 @@ class StdioCommand:
     name: ClassVar[str] = "stdio"
 
     @classmethod
-    def register(cls, subparsers: argparse._SubParsersAction) -> None:
+    def register(
+        cls, subparsers: argparse._SubParsersAction[argparse.ArgumentParser]
+    ) -> None:
         parser = subparsers.add_parser(
             cls.name,
             help="Start the MCP server using stdio transport (for CLI clients).",

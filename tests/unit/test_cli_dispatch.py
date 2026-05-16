@@ -38,7 +38,10 @@ def test_registry_lists_all_five_commands() -> None:
 def test_command_class_present(
     module_path: str, class_name: str, expected_name: str
 ) -> None:
-    module = importlib.import_module(module_path)
+    # Safe: module_path values are static parametrize literals above, never user input.
+    # fmt: off
+    module = importlib.import_module(module_path)  # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import  # noqa: E501
+    # fmt: on
     command = getattr(module, class_name)
     assert command.name == expected_name
 

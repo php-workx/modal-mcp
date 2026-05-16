@@ -14,7 +14,9 @@ class SetupCommand:
     name: ClassVar[str] = "setup"
 
     @classmethod
-    def register(cls, subparsers: argparse._SubParsersAction) -> None:
+    def register(
+        cls, subparsers: argparse._SubParsersAction[argparse.ArgumentParser]
+    ) -> None:
         parser = subparsers.add_parser(
             cls.name,
             help=(
@@ -112,7 +114,8 @@ class SetupCommand:
         from modal_mcp.agent_targets import get_target
 
         target = get_target(target_name)
-        return target.install_from_cli(args)
+        exit_code: int = target.install_from_cli(args)
+        return exit_code
 
     @classmethod
     def _generate_files(

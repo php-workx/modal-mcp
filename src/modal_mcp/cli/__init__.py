@@ -29,7 +29,9 @@ class CliCommand(Protocol):
     name: ClassVar[str]
 
     @classmethod
-    def register(cls, subparsers: argparse._SubParsersAction) -> None: ...
+    def register(
+        cls, subparsers: argparse._SubParsersAction[argparse.ArgumentParser]
+    ) -> None: ...
 
     @classmethod
     def run(cls, args: argparse.Namespace) -> int: ...

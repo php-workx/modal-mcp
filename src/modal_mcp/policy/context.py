@@ -5,7 +5,9 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Self
+from typing import Any, Self
+
+from fastmcp.server.middleware import MiddlewareContext
 
 from modal_mcp.config import ConfigError, Settings
 from modal_mcp.domain.refs import parse_signing_keys
@@ -16,7 +18,7 @@ from modal_mcp.policy.rate_limit import TokenBucketRateLimiter
 
 # Forward type alias matching engine.ActorResolver to avoid a circular import.
 # engine.py imports PolicyContext (this module), not the other way around.
-ActorResolver = Callable[[object], ApprovalActor]
+ActorResolver = Callable[[MiddlewareContext[Any]], ApprovalActor]
 
 
 @dataclass(frozen=True, slots=True)

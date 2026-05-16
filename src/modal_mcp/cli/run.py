@@ -14,7 +14,9 @@ class RunCommand:
     name: ClassVar[str] = "run"
 
     @classmethod
-    def register(cls, subparsers: argparse._SubParsersAction) -> None:
+    def register(
+        cls, subparsers: argparse._SubParsersAction[argparse.ArgumentParser]
+    ) -> None:
         parser = subparsers.add_parser(cls.name, help="Start the MCP server.")
         parser.add_argument(
             "--env-file",

@@ -1,4 +1,5 @@
 .agents/
+.claude/
 .env
 .env.*
 .mypy_cache/
