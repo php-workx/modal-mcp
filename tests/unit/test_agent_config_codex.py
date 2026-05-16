@@ -29,11 +29,7 @@ from unittest.mock import patch
 
 import pytest
 
-from modal_mcp.agent_config import (
-    CodexInstallError,
-    install_codex_config,
-    print_agent_config,
-)
+from modal_mcp.agent_targets import get_target
 from modal_mcp.agent_targets.codex import (
     CODEX_AGENT_NAME,
     CODEX_BACKUP_SUFFIX_TEMPLATE,
@@ -47,9 +43,16 @@ from modal_mcp.agent_targets.codex import (
     CODEX_TOP_LEVEL_KEY,
     CODEX_TRANSPORT,
     AgentTargetContract,
+    CodexInstallError,
     build_contract,
     format_config_snippet,
+    install as install_codex_config,
 )
+
+
+def print_agent_config(target: str, **kwargs) -> None:
+    """Test helper mirroring the old agent_config.print_agent_config surface."""
+    get_target(target).render(**kwargs)
 
 # ---------------------------------------------------------------------------
 # Field presence and type
@@ -905,7 +908,7 @@ def test_print_agent_config_codex_does_not_write_files(tmp_path: Path) -> None:
 
 def test_print_agent_config_unknown_target_raises() -> None:
     """print_agent_config() must raise ValueError for unknown targets."""
-    with pytest.raises(ValueError, match="Unknown target"):
+    with pytest.raises(ValueError, match="Unknown agent target"):
         print_agent_config("cursor", file=io.StringIO())
 
 

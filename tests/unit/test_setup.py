@@ -29,7 +29,7 @@ from modal_mcp.setup import (
     warn_if_modal_toml_present,
     write_service_token_files,
 )
-from modal_mcp.setup_files import SetupFilesError
+from modal_mcp.domain.file_io import SetupFilesError
 
 # ---------------------------------------------------------------------------
 # Helpers
