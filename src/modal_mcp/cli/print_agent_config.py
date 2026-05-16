@@ -17,13 +17,16 @@ class PrintAgentConfigCommand:
     def register(
         cls, subparsers: argparse._SubParsersAction[argparse.ArgumentParser]
     ) -> None:
+        from modal_mcp.agent_targets import TARGETS
+
+        target_names = sorted(name for name, _ in TARGETS)
         parser = subparsers.add_parser(
             cls.name,
             help="Print the agent client configuration block.",
         )
         parser.add_argument(
             "--target",
-            choices=["claude", "claude_desktop", "codex"],
+            choices=target_names,
             default="claude",
             help="Agent target to print config for (default: claude).",
         )
