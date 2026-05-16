@@ -346,10 +346,13 @@ class WorkspaceNormalizer:
         self._signing_keys = signing_keys
         self._ttl = ttl
 
-    def normalize(self, raw: Any) -> tuple[Workspace, list[str]]:
-        entity = normalize_workspace(
-            raw, signing_keys=self._signing_keys, ttl=self._ttl
-        )
+    def normalize(self, raw: Any) -> tuple[Workspace | None, list[str]]:
+        try:
+            entity = normalize_workspace(
+                raw, signing_keys=self._signing_keys, ttl=self._ttl
+            )
+        except Exception as exc:
+            return None, [str(exc)]
         return entity, []
 
 
@@ -398,10 +401,13 @@ class EnvironmentNormalizer:
         self._signing_keys = signing_keys
         self._ttl = ttl
 
-    def normalize(self, raw: Any) -> tuple[Environment, list[str]]:
-        entity = normalize_environment(
-            raw, signing_keys=self._signing_keys, ttl=self._ttl
-        )
+    def normalize(self, raw: Any) -> tuple[Environment | None, list[str]]:
+        try:
+            entity = normalize_environment(
+                raw, signing_keys=self._signing_keys, ttl=self._ttl
+            )
+        except Exception as exc:
+            return None, [str(exc)]
         return entity, []
 
 

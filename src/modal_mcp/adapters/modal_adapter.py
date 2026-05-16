@@ -284,7 +284,13 @@ class ModalSdkAdapter:
         """Return the authenticated workspace summary."""
 
         raw = self._rpc.call("WorkspaceNameLookup", self._rpc.request("Empty"))
-        entity, _ = self._workspace_normalizer.normalize(raw)
+        entity, warnings = self._workspace_normalizer.normalize(raw)
+        if entity is None:
+            reason = "; ".join(warnings) or "workspace normalization failed"
+            raise ModalAdapterError(
+                ErrorCode.UPSTREAM_ERROR,
+                f"failed to normalize workspace: {reason}",
+            )
         return entity
 
     def list_workspaces(self) -> Sequence[Workspace]:
