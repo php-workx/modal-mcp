@@ -29,6 +29,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from modal_mcp.adapters.credentials import DEFAULT_MODAL_PROFILE
+
 #: Minimum character length for a value to be treated as a redactable secret.
 #: Must stay in sync with :attr:`modal_mcp.observability.redact.MIN_SECRET_LENGTH`.
 _MIN_SECRET_LENGTH: int = 4
@@ -457,6 +459,11 @@ def probe_credentials(
         else Path(config_path_str).expanduser()
     )
     if effective_config_path.is_file():
+        # Profile name MUST stay in sync with what
+        # ``CredentialSource.resolve(settings)`` selects: pydantic-settings
+        # loads ``MODAL_PROFILE`` from os.environ (priority) then from the
+        # ``.env`` file, so we mirror that order here.  The fallback constant
+        # is imported from ``adapters.credentials`` for single-source-of-truth.
         profile = (
             os.environ.get("MODAL_PROFILE")
             or (
@@ -464,7 +471,7 @@ def probe_credentials(
                 if parsed_env_file_vars
                 else None
             )
-            or "default"
+            or DEFAULT_MODAL_PROFILE
         )
         return CredentialProbeResult(
             found=True,
@@ -763,7 +770,7 @@ def run_doctor(
         elif cred.source == "modal_toml":
             message = (
                 f"Modal credentials loaded from {cred.detail} "
-                f"at profile '{cred.profile or 'default'}'"
+                f"at profile '{cred.profile or DEFAULT_MODAL_PROFILE}'"
             )
         else:
             message = f"Modal credentials found ({cred.source}): {cred.detail}"

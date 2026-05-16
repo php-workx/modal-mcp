@@ -39,7 +39,7 @@ def _settings(
     if token_secret is not None:
         kwargs["modal_token_secret"] = SecretStr(token_secret)
     if profile is not None:
-        kwargs["modal_profile"] = profile  # Settings gains this field in Step 2.2
+        kwargs["modal_profile"] = profile
     return Settings(**kwargs)
 
 
@@ -147,6 +147,92 @@ class TestCredentialSourceFailureModes:
         toml_text = '[default]\ntoken_id = "x"\ntoken_secret = "y"\n'
         settings = _settings(tmp_path, modal_config_text=toml_text, profile="missing")
         with pytest.raises(CredentialError, match="profile 'missing'"):
+            CredentialSource.resolve(settings)
+
+
+class TestCredentialSourceHalfPairEnv:
+    """Setting only one of MODAL_TOKEN_ID / SECRET must NOT fall through to TOML.
+
+    ``Settings`` itself rejects half-pair env input at validation time, but
+    ``CredentialSource.resolve`` is the documented resolver and must be
+    self-protective: a hand-constructed ``Settings`` (e.g. via
+    ``model_construct`` in tests, or future Settings refactors) must not
+    silently produce TOML-sourced credentials when the operator partially
+    configured env auth.
+    """
+
+    def _half_pair_settings(
+        self,
+        tmp_path: Path,
+        *,
+        token_id: str | None,
+        token_secret: str | None,
+    ) -> Settings:
+        # Build a complete Settings, then bypass validation by constructing a
+        # mutated copy via ``model_construct`` so we can test the
+        # CredentialSource branch directly.
+        base = _settings(
+            tmp_path,
+            token_id="ak-env",
+            token_secret="as-env",
+            modal_config_text=(
+                '[default]\ntoken_id = "ak-toml"\ntoken_secret = "as-toml"\n'
+            ),
+        )
+        return base.model_copy(
+            update={
+                "modal_token_id": (
+                    SecretStr(token_id) if token_id is not None else None
+                ),
+                "modal_token_secret": (
+                    SecretStr(token_secret) if token_secret is not None else None
+                ),
+            }
+        )
+
+    def test_env_id_without_secret_raises(self, tmp_path: Path) -> None:
+        settings = self._half_pair_settings(
+            tmp_path, token_id="ak-env", token_secret=None
+        )
+        with pytest.raises(
+            CredentialError,
+            match=r"MODAL_TOKEN_ID is set but MODAL_TOKEN_SECRET is missing",
+        ):
+            CredentialSource.resolve(settings)
+
+    def test_env_secret_without_id_raises(self, tmp_path: Path) -> None:
+        settings = self._half_pair_settings(
+            tmp_path, token_id=None, token_secret="as-env"
+        )
+        with pytest.raises(
+            CredentialError,
+            match=r"MODAL_TOKEN_SECRET is set but MODAL_TOKEN_ID is missing",
+        ):
+            CredentialSource.resolve(settings)
+
+
+class TestCredentialSourceTomlTypeValidation:
+    """TOML token fields must be strings; non-string values fail fast."""
+
+    def test_int_token_id_raises(self, tmp_path: Path) -> None:
+        # Missing quotes around the token id — TOML parses it as int.
+        settings = _settings(
+            tmp_path,
+            modal_config_text='[default]\ntoken_id = 123\ntoken_secret = "as"\n',
+        )
+        with pytest.raises(
+            CredentialError, match=r"token_id must be a string, got int"
+        ):
+            CredentialSource.resolve(settings)
+
+    def test_int_token_secret_raises(self, tmp_path: Path) -> None:
+        settings = _settings(
+            tmp_path,
+            modal_config_text='[default]\ntoken_id = "ak"\ntoken_secret = 456\n',
+        )
+        with pytest.raises(
+            CredentialError, match=r"token_secret must be a string, got int"
+        ):
             CredentialSource.resolve(settings)
 
 
