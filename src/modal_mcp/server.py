@@ -40,6 +40,7 @@ from modal_mcp.policy.approval import (
     resolve_http_actor,
     validate_approval_http_request,
 )
+from modal_mcp.policy.context import PolicyContext
 from modal_mcp.policy.engine import PolicyMiddleware
 from modal_mcp.policy.rate_limit import TokenBucketRateLimiter, rate_limit_key
 from modal_mcp.toolsets import register_toolsets
@@ -391,14 +392,14 @@ def create_mcp(
         auth=build_auth(resolved_settings),
     )
     mcp.add_middleware(OtelMiddleware(resolved_settings))
-    mcp.add_middleware(
-        PolicyMiddleware(
-            mcp,
-            resolved_settings,
-            approval_ledger=approval_ledger,
-            audit_sink=resolved_audit_sink,
-        )
-    )
+
+    policy_context = PolicyContext.from_settings(resolved_settings)
+    if approval_ledger is not None:
+        policy_context = replace(policy_context, approval_ledger=approval_ledger)
+    if resolved_audit_sink is not None:
+        policy_context = replace(policy_context, audit_sink=resolved_audit_sink)
+
+    mcp.add_middleware(PolicyMiddleware(mcp, policy_context, resolved_settings))
     register_toolsets(mcp, resolved_settings)
 
     disabled_toolsets = ALL_TOOLSETS - set(resolved_settings.modal_mcp_enabled_toolsets)
