@@ -17,7 +17,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
-from modal_mcp.adapters.modal_adapter import ModalSdkAdapter
+from modal_mcp.adapters.credentials import CredentialSource
+from modal_mcp.adapters.modal_adapter import ModalRpcClient, ModalSdkAdapter
 from modal_mcp.adapters.registry import bind_modal_adapter
 from modal_mcp.asgi import OriginGuard
 from modal_mcp.auth import STATIC_BEARER_SCOPE, StaticTokenVerifier, build_auth
@@ -28,7 +29,7 @@ from modal_mcp.config import (
     scrub_secret_env,
 )
 from modal_mcp.domain.errors import ErrorCode, ModalAdapterError
-from modal_mcp.domain.refs import parse_signing_keys
+from modal_mcp.domain.refs import RefCodec, parse_signing_keys
 from modal_mcp.observability.audit import audit_sink_from_settings
 from modal_mcp.observability.logger import configure_logging
 from modal_mcp.observability.tracing import OtelMiddleware
@@ -64,9 +65,28 @@ SettingsFactory = Callable[[], Settings]
 
 
 async def _default_adapter_factory(settings: Settings) -> ModalSdkAdapter:
-    """Create the production Modal SDK adapter."""
+    """Production bootstrap: resolve credentials, build client, assemble adapter.
 
-    return await ModalSdkAdapter.create(settings)
+    Failures at any phase carry provenance:
+
+    - CredentialError mentions which sources were tried (env / TOML at profile).
+    - ModalAdapterError(UPSTREAM_ERROR) from the auth ping includes the
+      credential source via ``creds.describe()``.
+    """
+
+    creds = CredentialSource.resolve(settings)
+    rpc = await ModalRpcClient.from_credentials(creds)
+    if settings.modal_mcp_signing_keys is None:  # pragma: no cover - guarded by Settings
+        msg = "MODAL_MCP_SIGNING_KEYS is required to build RefCodec"
+        raise ModalAdapterError(ErrorCode.INTERNAL_DRIFT, msg)
+    ref_codec = RefCodec(
+        parse_signing_keys(settings.modal_mcp_signing_keys.get_secret_value())
+    )
+    return await ModalSdkAdapter.create(
+        settings,
+        client=rpc,
+        ref_codec=ref_codec,
+    )
 
 
 def _approval_ledger_from_settings(settings: Settings) -> ApprovalTokenLedger:
@@ -380,6 +400,18 @@ def create_mcp(
         assert_runtime_security(resolved_settings)
     configure_logging(resolved_settings)
     resolved_audit_sink = audit_sink or audit_sink_from_settings(resolved_settings)
+
+    # Pre-bootstrap: validate credentials *before* FastMCP starts.  This moves
+    # the most common operator misconfiguration (missing tokens, missing
+    # profile) out of the lifespan, where it would otherwise be swallowed by
+    # FastMCP's startup error reporting, into the synchronous caller path
+    # where uvicorn / pytest can surface it.  We deliberately do NOT eagerly
+    # construct the Modal client here: that would open a network connection
+    # at module-import time and break tests that never want to talk to Modal.
+    # The full bootstrap (resolve -> client -> adapter) still happens inside
+    # the lifespan via adapter_factory; the auth probe runs there.
+    if adapter_factory is _default_adapter_factory:
+        CredentialSource.resolve(resolved_settings)
 
     @asynccontextmanager
     async def lifespan(server: FastMCP[Any]) -> AsyncIterator[None]:
