@@ -1,8 +1,8 @@
 # MCP Client Setup
 
 Modal MCP can be connected to any MCP client that can launch a stdio server or
-connect to a local HTTP/SSE endpoint. The built-in installer currently supports
-Codex CLI and Claude Desktop. Claude Code is configured manually.
+connect to a local HTTP/SSE endpoint. The built-in installer supports Codex
+CLI, Claude Code, and Claude Desktop.
 
 Run setup first:
 
@@ -27,7 +27,24 @@ uv run modal-mcp doctor --env-file .env
 Claude Code (the `claude` CLI) launches `modal-mcp` as a stdio subprocess.
 This is the recommended client for day-to-day use.
 
-Add the following to your Claude Code settings file
+Recommended: `modal-mcp setup --install claude-code` writes
+`~/.claude/settings.json` for you with backup, idempotency check, and dry-run
+support. The manual snippet below is the fallback for operators who prefer
+hand-editing.
+
+Preview the change without writing:
+
+```bash
+uv run modal-mcp setup --install claude-code --env-file "$PWD/.env" --dry-run
+```
+
+Install it:
+
+```bash
+uv run modal-mcp setup --install claude-code --env-file "$PWD/.env" --yes
+```
+
+Manual fallback — add the following to your Claude Code settings file
 (`~/.claude/settings.json`):
 
 ```json
@@ -35,7 +52,7 @@ Add the following to your Claude Code settings file
   "mcpServers": {
     "modal-mcp": {
       "command": "modal-mcp",
-      "args": ["run", "--env-file", "/absolute/path/to/project/.env"]
+      "args": ["stdio", "--env-file", "/absolute/path/to/project/.env"]
     }
   }
 }
@@ -52,7 +69,7 @@ checkout), use the absolute executable path or wrap with `uv run`:
   "mcpServers": {
     "modal-mcp": {
       "command": "/absolute/path/to/project/.venv/bin/modal-mcp",
-      "args": ["run", "--env-file", "/absolute/path/to/project/.env"]
+      "args": ["stdio", "--env-file", "/absolute/path/to/project/.env"]
     }
   }
 }
@@ -67,7 +84,7 @@ Or with `uv run`:
       "command": "uv",
       "args": [
         "run", "--directory", "/absolute/path/to/project",
-        "modal-mcp", "run", "--env-file", "/absolute/path/to/project/.env"
+        "modal-mcp", "stdio", "--env-file", "/absolute/path/to/project/.env"
       ]
     }
   }

@@ -25,7 +25,7 @@ v1 is a local read-only beta.
 | Area | Status |
 | --- | --- |
 | Local MCP server | Supported |
-| Claude Code install | Manual config in `~/.claude/settings.json` |
+| Claude Code install | Supported by `modal-mcp setup --install claude-code` |
 | Codex CLI install | Supported by `modal-mcp setup --install codex` |
 | Claude Desktop install | Supported by `modal-mcp setup --install claude` |
 | Read-only Modal tools | Supported |
