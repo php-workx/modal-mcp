@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -16,13 +15,12 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from modal_mcp.config import Settings
 from modal_mcp.domain.errors import ErrorCode, ModalAdapterError
-from modal_mcp.domain.refs import decode_approval, parse_signing_keys
+from modal_mcp.domain.refs import decode_approval
 from modal_mcp.observability.redact import collect_known_secrets, redact_value
-from modal_mcp.policy.approval import (
-    ApprovalActor,
-    ApprovalTokenLedger,
-)
-from modal_mcp.policy.rate_limit import TokenBucketRateLimiter, rate_limit_key
+from modal_mcp.policy.approval import ApprovalActor
+from modal_mcp.policy.audit import AuditSink
+from modal_mcp.policy.context import PolicyContext
+from modal_mcp.policy.rate_limit import rate_limit_key
 from modal_mcp.policy.rules import CHANGE_TOOLSETS, PolicyDecision, evaluate
 
 MUTATING_TOOLS = frozenset(
@@ -55,50 +53,26 @@ class ToolPolicy:
     mutating: bool
 
 
-class NullAuditSink:
-    """No-op audit hook used until the structured audit sink lands."""
-
-    def record_decision(self, *_: Any, **__: Any) -> None:
-        return
-
-    def record_error(self, *_: Any, **__: Any) -> None:
-        return
-
-    def record_result(self, *_: Any, **__: Any) -> None:
-        return
-
-
 class PolicyMiddleware(Middleware):
     """Apply Modal MCP policy to every FastMCP tool call."""
 
     def __init__(
         self,
         mcp: FastMCP[Any],
+        context: PolicyContext,
         settings: Settings,
-        *,
-        approval_ledger: ApprovalTokenLedger | None = None,
-        rate_limiter: TokenBucketRateLimiter | None = None,
-        mutation_limiter: TokenBucketRateLimiter | None = None,
-        actor_resolver: ActorResolver | None = None,
-        audit_sink: Any | None = None,
-        signing_keys: Sequence[tuple[str, bytes]] | None = None,
-        now: Callable[[], int] | None = None,
     ) -> None:
         self._mcp = mcp
+        self._context = context
         self.settings = settings
-        self.approval_ledger = approval_ledger or ApprovalTokenLedger(
-            settings.modal_mcp_approval_ledger
-        )
-        self.rate_limiter = rate_limiter or TokenBucketRateLimiter(
-            capacity=max(1.0, settings.modal_mcp_rate_limit_rps),
-            refill_rate_per_second=settings.modal_mcp_rate_limit_rps,
-        )
-        self.mutation_limiter = mutation_limiter or _default_mutation_limiter(settings)
-        self.actor_resolver = actor_resolver or resolve_middleware_actor
-        self.audit_sink = audit_sink or NullAuditSink()
-        self.signing_keys = tuple(signing_keys or _signing_keys_from_settings(settings))
+        self.approval_ledger = context.approval_ledger
+        self.rate_limiter = context.rate_limiter
+        self.mutation_limiter = context.mutation_limiter
+        self.actor_resolver = context.actor_resolver
+        self.audit_sink: AuditSink = context.audit_sink
+        self.signing_keys = context.signing_keys
         self.known_secrets = collect_known_secrets(settings)
-        self._now = now or (lambda: int(time.time()))
+        self._now = context.now
         self._argument_adapter = TypeAdapter(PolicyCallArguments)
 
     async def on_call_tool(
@@ -359,25 +333,6 @@ def _append_ref_values(refs: list[str], value: Any) -> None:
         refs.extend(str(item) for item in value)
 
 
-def _default_mutation_limiter(
-    settings: Settings,
-) -> TokenBucketRateLimiter | None:
-    seconds = settings.modal_mcp_mutation_rate_limit_seconds
-    if seconds <= 0:
-        return None
-    return TokenBucketRateLimiter(
-        capacity=1.0,
-        refill_rate_per_second=1.0 / seconds,
-    )
-
-
-def _signing_keys_from_settings(settings: Settings) -> tuple[tuple[str, bytes], ...]:
-    raw_keys = settings.modal_mcp_signing_keys
-    if raw_keys is None:
-        return ()
-    return parse_signing_keys(raw_keys.get_secret_value())
-
-
 def _policy_error(decision: PolicyDecision) -> ModalAdapterError:
     code = (
         ErrorCode.POLICY_BLOCKED
@@ -389,7 +344,6 @@ def _policy_error(decision: PolicyDecision) -> ModalAdapterError:
 
 __all__ = [
     "MUTATING_TOOLS",
-    "NullAuditSink",
     "PolicyCallArguments",
     "PolicyMiddleware",
     "ToolPolicy",
