@@ -75,6 +75,11 @@ def _approval_ledger_from_settings(settings: Settings) -> ApprovalTokenLedger:
     return ApprovalTokenLedger(settings.modal_mcp_approval_ledger)
 
 
+# NOTE: parallels PolicyContext._build_signing_keys but raises
+# ModalAdapterError (HTTP 401) instead of ConfigError (startup abort). The
+# HTTP route runs at request time and must surface a wire-level auth error,
+# not a fatal startup error. Do not merge these two helpers without an
+# error-code migration plan.
 def _approval_signing_keys_from_settings(
     settings: Settings,
 ) -> tuple[tuple[str, bytes], ...]:

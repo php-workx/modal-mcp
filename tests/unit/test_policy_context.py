@@ -96,7 +96,11 @@ class TestPolicyContextIsFrozen:
 
 
 class TestPolicyContextStartupInvariants:
-    """Misconfiguration must fail at PolicyContext.from_settings, not on the first tool call."""
+    """Misconfiguration must fail at PolicyContext.from_settings.
+
+    Not on the first tool call — the whole point of the dataclass is to
+    surface bad config at startup with a clean traceback.
+    """
 
     def test_raises_when_signing_keys_missing_and_not_read_only(
         self, tmp_path: Path
@@ -112,7 +116,10 @@ class TestPolicyContextStartupInvariants:
             PolicyContext.from_settings(settings)
 
     def test_allows_missing_signing_keys_when_read_only(self, tmp_path: Path) -> None:
-        """Read-only mode never consumes approvals, so empty signing keys are tolerable."""
+        """Read-only mode never consumes approvals.
+
+        Empty signing keys are tolerable when MODAL_MCP_READ_ONLY=true.
+        """
 
         settings = _settings(tmp_path, modal_mcp_read_only=True)
         object.__setattr__(settings, "modal_mcp_signing_keys", None)

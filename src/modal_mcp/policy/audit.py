@@ -23,9 +23,7 @@ class AuditSink(Protocol):
     def record_error(self, context: Any, tool_name: str, exc: Exception) -> None:
         """Record a redacted tool error."""
 
-    def record_result(
-        self, context: Any, tool_name: str, result: ToolResult
-    ) -> None:
+    def record_result(self, context: Any, tool_name: str, result: ToolResult) -> None:
         """Record a redacted tool result summary."""
 
 
