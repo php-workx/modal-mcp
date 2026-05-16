@@ -8,6 +8,7 @@ with messages that name the source ('env var X', 'TOML file Y at profile Z').
 from __future__ import annotations
 
 import tomllib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -126,6 +127,12 @@ class CredentialSource:
             msg = (
                 f"Modal config file {config_path} has no profile '{profile}'; "
                 f"available profiles: {sorted(data.keys())!r}"
+            )
+            raise CredentialError(msg)
+        if not isinstance(section, Mapping):
+            msg = (
+                f"Modal config file {config_path} profile '{profile}' must be "
+                f"a table, got {type(section).__name__}"
             )
             raise CredentialError(msg)
 

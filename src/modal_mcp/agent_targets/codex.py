@@ -329,7 +329,9 @@ def _atomic_write_text(path: Path, content: str) -> None:
         fd, tmp_str = tempfile.mkstemp(dir=str(path.parent), prefix=".tmp_codex_")
         tmp_path = Path(tmp_str)
         try:
-            os.write(fd, encoded)
+            offset = 0
+            while offset < len(encoded):
+                offset += os.write(fd, encoded[offset:])
         finally:
             os.close(fd)
         tmp_path.replace(path)

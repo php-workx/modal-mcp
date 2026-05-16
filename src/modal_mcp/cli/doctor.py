@@ -58,12 +58,11 @@ class DoctorCommand:
                 print(line)
 
         print()
-        if report.has_failures:
-            pass  # exit code already reflects failures via report.exit_code
-        elif report.has_warnings:
-            print("Partial ready: some items need attention (see warnings above).")
-        else:
-            print("All checks passed.")
+        if not report.has_failures:
+            if report.has_warnings:
+                print("Partial ready: some items need attention (see warnings above).")
+            else:
+                print("All checks passed.")
 
         # Surface DiagnosticReport.exit_code directly so callers (CI, shell
         # pipelines) can distinguish: 0 = all OK, 3 = warnings only (partial

@@ -94,6 +94,10 @@ def test_run_stdio_toolset_disable_matches_http_via_create_mcp() -> None:
     # the caller passed in, with no divergent post-processing.
     mock_create_mcp.assert_called_once_with(fake_settings)
     fake_mcp_instance.run.assert_called_once_with(transport="stdio")
+    # Regression guard: stdio path MUST NOT call mcp.disable() after create_mcp.
+    # All tag-disable logic lives inside create_mcp; a divergent post-create
+    # disable would re-introduce the bug fixed in commit a45393e.
+    fake_mcp_instance.disable.assert_not_called()
 
 
 def test_run_stdio_wires_policy_middleware_into_fastmcp_stack(

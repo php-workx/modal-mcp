@@ -149,6 +149,13 @@ class TestCredentialSourceFailureModes:
         with pytest.raises(CredentialError, match="profile 'missing'"):
             CredentialSource.resolve(settings)
 
+    def test_toml_non_table_profile_raises(self, tmp_path: Path) -> None:
+        """TOML profile written as a literal (not a table) must fail loud."""
+        toml_text = 'default = "literal-string-not-a-table"\n'
+        settings = _settings(tmp_path, modal_config_text=toml_text)
+        with pytest.raises(CredentialError, match="must be a table"):
+            CredentialSource.resolve(settings)
+
 
 class TestCredentialSourceHalfPairEnv:
     """Setting only one of MODAL_TOKEN_ID / SECRET must NOT fall through to TOML.

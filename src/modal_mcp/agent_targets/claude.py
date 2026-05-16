@@ -479,7 +479,9 @@ def _atomic_write_text(path: Path, content: str) -> None:
         fd, tmp_str = tempfile.mkstemp(dir=str(path.parent), prefix=".tmp_claude_")
         tmp_path = Path(tmp_str)
         try:
-            os.write(fd, encoded)
+            offset = 0
+            while offset < len(encoded):
+                offset += os.write(fd, encoded[offset:])
         finally:
             os.close(fd)
         tmp_path.replace(path)
@@ -828,9 +830,16 @@ def install_from_cli(args: argparse.Namespace) -> int:
 
     bind: str | None = None
     if resolved_env.exists():
-        for line in resolved_env.read_text(encoding="utf-8").splitlines():
+        try:
+            env_text = resolved_env.read_text(encoding="utf-8")
+        except OSError:
+            env_text = ""
+        for line in env_text.splitlines():
             if line.startswith("MODAL_MCP_HTTP_BIND="):
-                bind = line.split("=", 1)[1].strip()
+                raw = line.split("=", 1)[1].strip()
+                if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ("'", '"'):
+                    raw = raw[1:-1]
+                bind = raw
                 break
     if bind is None:
         bind = os.environ.get("MODAL_MCP_HTTP_BIND")

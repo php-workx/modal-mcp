@@ -33,14 +33,17 @@ class SetupCommand:
                 "Existing keys are preserved (idempotent)."
             ),
         )
+        from modal_mcp.agent_targets import TARGETS
+
+        target_names = sorted(name for name, _ in TARGETS)
         parser.add_argument(
             "--install",
-            choices=["codex", "claude"],
+            choices=target_names,
             metavar="TARGET",
             default=None,
             help=(
                 "Install the MCP config into the specified agent client. "
-                "Supported values: codex, claude. "
+                f"Supported values: {', '.join(target_names)}. "
                 "Use with --dry-run to preview the change without writing."
             ),
         )

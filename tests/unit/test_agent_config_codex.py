@@ -912,7 +912,7 @@ def test_print_agent_config_codex_does_not_write_files(tmp_path: Path) -> None:
 def test_print_agent_config_unknown_target_raises() -> None:
     """print_agent_config() must raise ValueError for unknown targets."""
     with pytest.raises(ValueError, match="Unknown agent target"):
-        print_agent_config("cursor", file=io.StringIO())
+        print_agent_config("definitely-not-a-real-target", file=io.StringIO())
 
 
 def test_print_agent_config_codex_case_insensitive() -> None:
