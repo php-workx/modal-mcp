@@ -14,7 +14,12 @@ from typing import Any
 
 from starlette.requests import Request
 
-from modal_mcp.asgi import OriginValidationError, validate_origin
+from modal_mcp.asgi import (
+    OriginGuard,
+    OriginValidationError,
+    _normalize_host,
+    _normalize_origin,
+)
 from modal_mcp.config import Settings
 from modal_mcp.domain.errors import ErrorCode, ModalAdapterError
 from modal_mcp.domain.refs import ApprovalPayload, decode_approval
@@ -417,7 +422,7 @@ def token_sha256(token: str) -> str:
 
 def _validate_transport_controls(request: Request, settings: Settings) -> None:
     try:
-        validate_origin(
+        _validate_request_origin(
             request.headers.get("origin"),
             request.headers.get("host"),
             settings,
@@ -428,6 +433,50 @@ def _validate_transport_controls(request: Request, settings: Settings) -> None:
     fetch_site = request.headers.get("sec-fetch-site")
     if fetch_site and fetch_site.lower() not in SAFE_FETCH_SITES:
         raise _policy_blocked("cross-site approval requests are rejected")
+
+
+def _validate_request_origin(
+    origin: str | None,
+    host: str | None,
+    settings: Settings,
+) -> None:
+    """Validate request ``Origin`` / ``Host`` headers against the configured allowlists.
+
+    The approval HTTP route lives outside the ``/mcp`` mount and therefore is
+    not wrapped by :class:`OriginGuard`; it performs its own per-request check.
+    The allowlists are rebuilt per call: this is cheap (small tuples) and the
+    Settings layer already validates the entries at startup, so the rebuild is
+    pure defence-in-depth, never the cause of operator-visible failure.
+    """
+
+    normalized_origin = _normalize_origin(origin)
+    if normalized_origin is None:
+        if origin is None:
+            msg = "missing Origin header"
+        elif origin.strip().lower() == "null":
+            msg = "null Origin header is not allowed"
+        else:
+            msg = f"unsupported Origin value: {origin!r}"
+        raise OriginValidationError(msg)
+
+    normalized_host = _normalize_host(host)
+    if normalized_host is None:
+        msg = "missing or malformed Host header"
+        raise OriginValidationError(msg)
+
+    allowed_hosts = OriginGuard._build_allowed_set(
+        settings.modal_mcp_allowed_hosts, kind="host"
+    )
+    if normalized_host not in allowed_hosts:
+        msg = f"host is not allowlisted: {host!r}"
+        raise OriginValidationError(msg)
+
+    allowed_origins = OriginGuard._build_allowed_set(
+        settings.modal_mcp_allowed_origins, kind="origin"
+    )
+    if normalized_origin not in allowed_origins:
+        msg = f"origin is not allowlisted: {origin!r}"
+        raise OriginValidationError(msg)
 
 
 async def _json_body(request: Request) -> dict[str, Any]:

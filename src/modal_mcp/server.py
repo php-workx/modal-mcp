@@ -429,7 +429,13 @@ def create_asgi_app(
         audit_sink=audit_sink,
         _skip_security_check=True,
     )
-    middleware = [Middleware(OriginGuard, settings=resolved_settings)]
+    middleware = [
+        Middleware(
+            OriginGuard,
+            allowed_origins=resolved_settings.modal_mcp_allowed_origins,
+            allowed_hosts=resolved_settings.modal_mcp_allowed_hosts,
+        )
+    ]
     mcp_app = mcp.http_app(path="/mcp", middleware=middleware)
     app = Starlette(
         routes=[

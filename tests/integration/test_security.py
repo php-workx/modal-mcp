@@ -361,7 +361,8 @@ def test_origin_guard_init_does_not_store_settings() -> None:
         allowed_hosts=("127.0.0.1", "localhost"),
     )
 
-    for attr in vars(guard):
+    # OriginGuard uses __slots__ so we walk those instead of __dict__.
+    for attr in OriginGuard.__slots__:
         value = getattr(guard, attr)
         assert not isinstance(value, Settings), (
             f"OriginGuard.{attr} unexpectedly holds Settings"
