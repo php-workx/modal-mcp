@@ -24,7 +24,7 @@ No new files created. No other files touched.
 
 ### New classes added to normalize.py
 
-```
+```text
 WorkspaceNormalizer     → wraps normalize_workspace     (required=False, never None)
 EnvironmentNormalizer   → wraps normalize_environment   (required=False, never None)
 AppNormalizer           → wraps normalize_app           (app_id required → None on failure)
@@ -63,6 +63,7 @@ def normalize(self, raw: Any, *, hint_task_id: str | None = None) -> tuple[Conta
 ```
 
 All other normalizer classes use:
+
 ```python
 def normalize(self, raw: Any) -> tuple[EntityType | None, list[str]]:
 ```
@@ -72,6 +73,7 @@ def normalize(self, raw: Any) -> tuple[EntityType | None, list[str]]:
 ## Task 1: WorkspaceNormalizer
 
 **Files:**
+
 - Modify: `src/modal_mcp/domain/normalize.py` — add class after `normalize_workspace` function
 - Modify: `tests/unit/test_normalize.py` — add `TestWorkspaceNormalizer` class
 
@@ -125,6 +127,7 @@ class TestWorkspaceNormalizer:
 ```bash
 uv run pytest tests/unit/test_normalize.py::TestWorkspaceNormalizer -v
 ```
+
 Expected: `ImportError: cannot import name 'WorkspaceNormalizer'`
 
 - [ ] **Step 3: Implement WorkspaceNormalizer**
@@ -158,6 +161,7 @@ class WorkspaceNormalizer:
 ```bash
 uv run pytest tests/unit/test_normalize.py::TestWorkspaceNormalizer -v
 ```
+
 Expected: 3 passed.
 
 - [ ] **Step 5: Commit**
@@ -172,6 +176,7 @@ git commit -m "feat(normalize): add WorkspaceNormalizer class"
 ## Task 2: EnvironmentNormalizer
 
 **Files:**
+
 - Modify: `src/modal_mcp/domain/normalize.py` — add class after `normalize_environment`
 - Modify: `tests/unit/test_normalize.py` — add `TestEnvironmentNormalizer`
 
@@ -212,6 +217,7 @@ class TestEnvironmentNormalizer:
 ```bash
 uv run pytest tests/unit/test_normalize.py::TestEnvironmentNormalizer -v
 ```
+
 Expected: `ImportError: cannot import name 'EnvironmentNormalizer'`
 
 - [ ] **Step 3: Implement EnvironmentNormalizer**
@@ -245,6 +251,7 @@ class EnvironmentNormalizer:
 ```bash
 uv run pytest tests/unit/test_normalize.py::TestEnvironmentNormalizer -v
 ```
+
 Expected: 3 passed.
 
 - [ ] **Step 5: Commit**
@@ -259,6 +266,7 @@ git commit -m "feat(normalize): add EnvironmentNormalizer class"
 ## Task 3: AppNormalizer
 
 **Files:**
+
 - Modify: `src/modal_mcp/domain/normalize.py` — add class after `normalize_app`
 - Modify: `tests/unit/test_normalize.py` — add `TestAppNormalizer`
 
@@ -314,6 +322,7 @@ class TestAppNormalizer:
 ```bash
 uv run pytest tests/unit/test_normalize.py::TestAppNormalizer -v
 ```
+
 Expected: `ImportError: cannot import name 'AppNormalizer'`
 
 - [ ] **Step 3: Implement AppNormalizer**
@@ -347,6 +356,7 @@ class AppNormalizer:
 ```bash
 uv run pytest tests/unit/test_normalize.py::TestAppNormalizer -v
 ```
+
 Expected: 4 passed.
 
 - [ ] **Step 5: Commit**
@@ -361,6 +371,7 @@ git commit -m "feat(normalize): add AppNormalizer class"
 ## Task 4: ContainerNormalizer
 
 **Files:**
+
 - Modify: `src/modal_mcp/domain/normalize.py` — add class after `normalize_container`
 - Modify: `tests/unit/test_normalize.py` — add `TestContainerNormalizer`
 
@@ -411,6 +422,7 @@ class TestContainerNormalizer:
 ```bash
 uv run pytest tests/unit/test_normalize.py::TestContainerNormalizer -v
 ```
+
 Expected: `ImportError: cannot import name 'ContainerNormalizer'`
 
 - [ ] **Step 3: Implement ContainerNormalizer**
@@ -451,6 +463,7 @@ class ContainerNormalizer:
 ```bash
 uv run pytest tests/unit/test_normalize.py::TestContainerNormalizer -v
 ```
+
 Expected: 5 passed.
 
 - [ ] **Step 5: Commit**
@@ -465,6 +478,7 @@ git commit -m "feat(normalize): add ContainerNormalizer class with hint_task_id 
 ## Task 5: VolumeNormalizer and SandboxNormalizer
 
 **Files:**
+
 - Modify: `src/modal_mcp/domain/normalize.py` — add both classes
 - Modify: `tests/unit/test_normalize.py` — add both test classes
 
@@ -530,6 +544,7 @@ class TestSandboxNormalizer:
 ```bash
 uv run pytest tests/unit/test_normalize.py::TestVolumeNormalizer tests/unit/test_normalize.py::TestSandboxNormalizer -v
 ```
+
 Expected: `ImportError`
 
 - [ ] **Step 3: Implement VolumeNormalizer and SandboxNormalizer**
@@ -587,6 +602,7 @@ class SandboxNormalizer:
 ```bash
 uv run pytest tests/unit/test_normalize.py::TestVolumeNormalizer tests/unit/test_normalize.py::TestSandboxNormalizer -v
 ```
+
 Expected: 6 passed.
 
 - [ ] **Step 5: Commit**
@@ -601,6 +617,7 @@ git commit -m "feat(normalize): add VolumeNormalizer and SandboxNormalizer class
 ## Task 6: DeploymentNormalizer and LogBatchNormalizer
 
 **Files:**
+
 - Modify: `src/modal_mcp/domain/normalize.py`
 - Modify: `tests/unit/test_normalize.py`
 
@@ -663,6 +680,7 @@ class TestLogBatchNormalizer:
 ```bash
 uv run pytest tests/unit/test_normalize.py::TestDeploymentNormalizer tests/unit/test_normalize.py::TestLogBatchNormalizer -v
 ```
+
 Expected: `ImportError`
 
 - [ ] **Step 3: Implement DeploymentNormalizer and LogBatchNormalizer**
@@ -727,6 +745,7 @@ class LogBatchNormalizer:
 ```bash
 uv run pytest tests/unit/test_normalize.py::TestDeploymentNormalizer tests/unit/test_normalize.py::TestLogBatchNormalizer -v
 ```
+
 Expected: 6 passed.
 
 - [ ] **Step 5: Commit**
@@ -741,6 +760,7 @@ git commit -m "feat(normalize): add DeploymentNormalizer and LogBatchNormalizer 
 ## Task 7: Export new classes from `__all__`
 
 **Files:**
+
 - Modify: `src/modal_mcp/domain/normalize.py` — update `__all__`
 - Modify: `tests/unit/test_normalize.py` — add export test
 
@@ -768,6 +788,7 @@ def test_all_normalizer_classes_exported() -> None:
 ```bash
 uv run pytest tests/unit/test_normalize.py::test_all_normalizer_classes_exported -v
 ```
+
 Expected: `AssertionError: Missing from __all__: {...}`
 
 - [ ] **Step 3: Update `__all__` in normalize.py**
@@ -802,6 +823,7 @@ __all__ = [
 ```bash
 uv run pytest tests/unit/test_normalize.py -v
 ```
+
 Expected: all pass.
 
 - [ ] **Step 5: Commit**
@@ -818,6 +840,7 @@ git commit -m "feat(normalize): export normalizer classes in __all__"
 Replace all `normalize_X(item, signing_keys=self._signing_keys)` call sites with per-instance normalizer calls. Delete `_normalize_safely`.
 
 **Files:**
+
 - Modify: `src/modal_mcp/adapters/modal_adapter.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -845,6 +868,7 @@ def test_adapter_normalize_calls_do_not_pass_signing_keys() -> None:
 ```bash
 uv run pytest tests/unit/test_modal_adapter.py::test_adapter_normalize_calls_do_not_pass_signing_keys -v
 ```
+
 Expected: `AssertionError` listing the current signing_keys call sites.
 
 - [ ] **Step 3: Add normalizer imports to modal_adapter.py**
@@ -1034,6 +1058,7 @@ return results
 - [ ] **Step 13: Migrate `list_sandboxes` and `get_sandbox` (line ~577, ~589)**
 
 For `list_sandboxes`:
+
 ```python
 results: list[SandboxSummary] = []
 for item in _items(raw, "sandboxes", "items"):
@@ -1044,6 +1069,7 @@ return results
 ```
 
 For `get_sandbox`:
+
 ```python
 # Before:
 return normalize_sandbox(raw, signing_keys=self._signing_keys)
@@ -1056,6 +1082,7 @@ return sb
 - [ ] **Step 14: Delete `_normalize_safely`**
 
 Delete the entire `_normalize_safely` method (lines ~258–270):
+
 ```python
 # DELETE this entire method:
 @staticmethod
@@ -1081,6 +1108,7 @@ Also delete the `_T = TypeVar("_T")` line — it is only used in `_normalize_saf
 uv run pytest tests/unit/test_modal_adapter.py -v
 uv run pytest -q
 ```
+
 Expected: all pass (673+).
 
 - [ ] **Step 16: Lint**
@@ -1102,6 +1130,7 @@ git commit -m "refactor(adapter): inject normalizer instances; remove _normalize
 ## Task 9: Remove legacy functions from `__all__`
 
 **Files:**
+
 - Modify: `src/modal_mcp/domain/normalize.py` — remove legacy names from `__all__`
 - Modify: `src/modal_mcp/adapters/modal_adapter.py` — remove legacy function imports
 - Modify: `tests/unit/test_normalize.py` — migrate direct function calls to class interface
@@ -1120,6 +1149,7 @@ def test_legacy_normalize_functions_not_in_all() -> None:
 ```bash
 uv run pytest tests/unit/test_normalize.py::test_legacy_normalize_functions_not_in_all -v
 ```
+
 Expected: `AssertionError` listing the legacy names.
 
 - [ ] **Step 3: Update existing test_normalize.py function-based tests**
@@ -1186,6 +1216,7 @@ Keep only the class imports.
 ```bash
 uv run pytest -q
 ```
+
 Expected: all pass.
 
 - [ ] **Step 7: Lint and type check**
@@ -1211,6 +1242,7 @@ git commit -m "refactor(normalize): remove legacy normalize_* functions from pub
 ```bash
 uv run pytest -q
 ```
+
 Expected: 673+ passed, 0 failed.
 
 - [ ] **Step 2: Verify no signing_keys at normalize call sites**
@@ -1218,6 +1250,7 @@ Expected: 673+ passed, 0 failed.
 ```bash
 grep -n "signing_keys" src/modal_mcp/adapters/modal_adapter.py
 ```
+
 Expected: only appears in `__init__` where `self._signing_keys` is set and where normalizers are constructed. No normalize call sites.
 
 - [ ] **Step 3: Verify `_normalize_safely` is gone**
@@ -1225,6 +1258,7 @@ Expected: only appears in `__init__` where `self._signing_keys` is set and where
 ```bash
 grep -rn "_normalize_safely" src/
 ```
+
 Expected: no output.
 
 - [ ] **Step 4: Verify new classes are the only public exports**
@@ -1232,8 +1266,10 @@ Expected: no output.
 ```bash
 python3 -c "from modal_mcp.domain.normalize import __all__; print(__all__)"
 ```
+
 Expected output:
-```
+
+```text
 ['AppNormalizer', 'ContainerNormalizer', 'DeploymentNormalizer', 'EnvironmentNormalizer', 'LogBatchNormalizer', 'SandboxNormalizer', 'VolumeNormalizer', 'WorkspaceNormalizer']
 ```
 

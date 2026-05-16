@@ -14,7 +14,7 @@
 
 Files touched by this plan:
 
-```
+```text
 src/modal_mcp/toolsets/
     _common.py           ← factory + scope-boundary docstring added here
     apps.py              ← list/get replaced with factory call; list_app_deployments kept custom
@@ -982,6 +982,7 @@ uv run pytest tests/integration/test_http_mcp.py -v -k "environment"
 `volumes.py` has four tools. Only `modal_list_volumes` fits the exact factory pattern — it takes `environment_name` and returns `(items, warnings)`. However, the current code uses `page_envelope` (not `page_envelope_partial`) because `list_volumes` returns `list[VolumeSummary]` directly (no warnings tuple). This is inconsistent with the factory contract which expects `tuple[Sequence[T], list[str]]`.
 
 We have two options:
+
 1. Wrap the adapter call in a lambda that adds an empty warnings list: `lambda environment_name=None: (get_modal_adapter().list_volumes(environment_name), [])`.
 2. Leave `volumes.py` unchanged (sandboxes and volumes both have non-standard shapes).
 
@@ -1192,6 +1193,7 @@ Closes epo-dry-up-toolset-registration-repl-cq9c"
 ## Self-Review
 
 **Spec coverage:**
+
 - factory in `_common.py` ✓
 - at least 3 entity toolsets use factory ✓ (apps, containers, discovery)
 - tool names, tags, annotations identical ✓ (verified by acceptance criteria step)
@@ -1204,6 +1206,7 @@ Closes epo-dry-up-toolset-registration-repl-cq9c"
 **Type consistency:** `TypeVar T` is used in the factory signature. The `exec`-based approach for dynamic parameter naming produces functions without type annotations, which is acceptable since FastMCP inspects via `inspect.signature` at registration time, not type-checkers. `# type: ignore` comments are applied narrowly.
 
 **Edge cases covered:**
+
 - `extra_list_params=None` (default, 0 extras) → apps, discovery, base test
 - `extra_list_params=["app_ref"]` (1 extra, str|None) → containers
 - `extra_list_params` with 2+ items → raises `ValueError` with a clear message

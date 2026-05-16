@@ -233,33 +233,39 @@ async def aclose(self) -> None:
 - [ ] **3.8** Update every call site in `ModalSdkAdapter` that calls `self._call_with_reconnect(...)` to call `self._rpc.call(...)`, and every call to `self._request(...)` to call `self._rpc.request(...)`. There are 14 call sites total (methods that delegate to other methods — `get_environment`, `get_app`, `stat_volume_path`, `get_container_logs` — are excluded because they never call `_call_with_reconnect` directly). Apply the following mechanical substitutions:
 
   In `validate_auth`:
+
   ```python
   self._rpc.call("WorkspaceNameLookup", self._rpc.request("Empty"))
   ```
 
   In `whoami`:
+
   ```python
   raw = self._rpc.call("WorkspaceNameLookup", self._rpc.request("Empty"))
   ```
 
   In `list_environments`:
+
   ```python
   raw = self._rpc.call("EnvironmentList", self._rpc.request("Empty"))
   ```
 
   In `list_apps`:
+
   ```python
   request = self._rpc.request("AppListRequest", environment_name=env)
   raw = self._rpc.call("AppList", request)
   ```
 
   In `list_app_deployments`:
+
   ```python
   request = self._rpc.request("AppDeploymentHistoryRequest", app_id=native_id)
   raw = self._rpc.call("AppDeploymentHistory", request)
   ```
 
   In `get_app_logs`:
+
   ```python
   request = self._rpc.request(
       "AppFetchLogsRequest",
@@ -278,6 +284,7 @@ async def aclose(self) -> None:
   ```
 
   In `list_containers`:
+
   ```python
   request = self._rpc.request(
       "TaskListRequest",
@@ -288,18 +295,21 @@ async def aclose(self) -> None:
   ```
 
   In `get_container`:
+
   ```python
   request = self._rpc.request("TaskGetInfoRequest", task_id=native_task_id)
   raw = self._rpc.call("TaskGetInfo", request)
   ```
 
   In `list_volumes`:
+
   ```python
   request = self._rpc.request("VolumeListRequest", environment_name=env)
   raw = self._rpc.call("VolumeList", request)
   ```
 
   In `ls_volume`:
+
   ```python
   request = self._rpc.request(
       "VolumeListFiles2Request",
@@ -312,6 +322,7 @@ async def aclose(self) -> None:
   ```
 
   In `read_volume_text`:
+
   ```python
   request = self._rpc.request(
       "VolumeGetFile2Request",
@@ -322,6 +333,7 @@ async def aclose(self) -> None:
   ```
 
   In `list_sandboxes`:
+
   ```python
   request = self._rpc.request(
       "SandboxListRequest",
@@ -334,6 +346,7 @@ async def aclose(self) -> None:
   ```
 
   In `get_sandbox`:
+
   ```python
   request = self._rpc.request(
       "SandboxWaitRequest",
@@ -343,6 +356,7 @@ async def aclose(self) -> None:
   ```
 
   In `get_sandbox_stdio`:
+
   ```python
   request = self._rpc.request(
       "SandboxGetLogsRequest",
@@ -376,6 +390,7 @@ cd /Users/runger/workspaces/modal-mcp && uv run pytest tests/unit/test_modal_ada
 Expected: all tests `PASSED`, no failures.
 
 Key tests to confirm pass without any source change to the test file:
+
 - `test_create_uses_injected_client_and_aclose` — client injection path still works via `create(client=...)`
 - `test_call_with_reconnect_retries_once` — factory reconnect still works via `create(client_factory=...)`
 - `test_call_with_reconnect_raises_retryable_without_factory` — retryable error still surfaces
@@ -436,6 +451,7 @@ EOF
 ## Self-Review
 
 **Spec coverage:**
+
 - `ModalRpcClient` class with `call(method, request)` and `aclose()` — covered in Phase 2.
 - `ModalSdkAdapter.create()` wires `ModalRpcClient`; adapter stores `rpc`, not raw client — covered in Phase 3.2.
 - `test_call_with_reconnect_retries_once` passes (existing test unchanged, logic now in `ModalRpcClient.call`) — covered in Phase 5.

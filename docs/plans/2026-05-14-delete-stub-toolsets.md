@@ -4,7 +4,7 @@
 
 **Goal:** Delete change.py (the four `disabled_error()` mutating stubs), remove its registration call sites, and regenerate the schema snapshot so those tools no longer appear in tools/list.
 
-**Architecture:** `change.py` registers `modal_stop_app`, `modal_rollback_app`, `modal_stop_container`, `modal_terminate_sandbox` under the "change" tag. `expert.py` is intentionally retained — its tools have a detailed v3 implementation spec (§10.4 of the v2 spec) and serve as schema-shape signals. The "change" tag and name are removed from server.py and __init__.py; the "expert" tag and everything in policy/rules.py, doctor.py, and engine.py that references "expert" remains untouched.
+**Architecture:** `change.py` registers `modal_stop_app`, `modal_rollback_app`, `modal_stop_container`, `modal_terminate_sandbox` under the "change" tag. `expert.py` is intentionally retained — its tools have a detailed v3 implementation spec (§10.4 of the v2 spec) and serve as schema-shape signals. The "change" tag and name are removed from server.py and **init**.py; the "expert" tag and everything in policy/rules.py, doctor.py, and engine.py that references "expert" remains untouched.
 
 **Tech Stack:** Python 3.12+, FastMCP, pytest, uv, ruff
 
@@ -23,6 +23,7 @@
 | `schema/mcp-tools.v1.json` | **REGENERATE** | Run `uv run python scripts/generate_schemas.py` |
 
 ### Files NOT changed (confirmed)
+
 - `src/modal_mcp/toolsets/_common.py` — `disabled_error()` helper retained
 - `src/modal_mcp/toolsets/expert.py` — v3 stub retained
 - `src/modal_mcp/policy/engine.py` — MUTATING_TOOLS, classify_tool expert branch all unchanged
@@ -37,10 +38,10 @@
 
 ### Step 1 — Confirm the test suite is green before touching anything
 
-- [ ] Run `uv run pytest --tb=short -q` from `/Users/runger/workspaces/modal-mcp` and confirm zero failures. If failures exist, stop and report them — do not proceed.
+- [ ] Run `uv run pytest --tb=short -q` from the repo root and confirm zero failures. If failures exist, stop and report them — do not proceed.
 
 ```bash
-cd /Users/runger/workspaces/modal-mcp && uv run pytest --tb=short -q
+cd "$(git rev-parse --show-toplevel)" && uv run pytest --tb=short -q
 ```
 
 ---
@@ -50,12 +51,12 @@ cd /Users/runger/workspaces/modal-mcp && uv run pytest --tb=short -q
 - [ ] Delete the file `src/modal_mcp/toolsets/change.py`.
 
 ```bash
-rm /Users/runger/workspaces/modal-mcp/src/modal_mcp/toolsets/change.py
+rm src/modal_mcp/toolsets/change.py
 ```
 
 ---
 
-### Step 3 — Remove change registration from toolsets/__init__.py
+### Step 3 — Remove change registration from toolsets/**init**.py
 
 - [ ] Edit `src/modal_mcp/toolsets/__init__.py`. Remove only the change import line and its registration call. The expert import and call stay. Final file:
 
@@ -234,7 +235,7 @@ async def test_modal_discovery_server_info_returns_hosted_read_only_mode(
 - [ ] Run ruff to confirm no lint errors introduced:
 
 ```bash
-cd /Users/runger/workspaces/modal-mcp && uv run ruff check .
+cd "$(git rev-parse --show-toplevel)" && uv run ruff check .
 ```
 
 Fix any unused-import (`F401`) or other errors reported before continuing.
@@ -246,7 +247,7 @@ Fix any unused-import (`F401`) or other errors reported before continuing.
 - [ ] Run the schema generator to update `schema/mcp-tools.v1.json`:
 
 ```bash
-cd /Users/runger/workspaces/modal-mcp && uv run python scripts/generate_schemas.py
+cd "$(git rev-parse --show-toplevel)" && uv run python scripts/generate_schemas.py
 ```
 
 This overwrites `schema/mcp-tools.v1.json` in place. Confirm the command exits 0.
@@ -280,10 +281,11 @@ print(f'OK: {len(names)} tools present; change stubs gone; expert tools retained
 - [ ] Run all tests and confirm zero failures:
 
 ```bash
-cd /Users/runger/workspaces/modal-mcp && uv run pytest --tb=short -q
+cd "$(git rev-parse --show-toplevel)" && uv run pytest --tb=short -q
 ```
 
 Key tests that must pass:
+
 - `tests/contract/test_schemas.py::test_schema_snapshot_is_current`
 - `tests/unit/test_toolsets.py` — expert test and discovery test both pass
 - `tests/unit/test_policy.py` — all policy tests pass unchanged
@@ -297,7 +299,7 @@ Key tests that must pass:
 - [ ] Stage and commit the deletions and modifications:
 
 ```bash
-cd /Users/runger/workspaces/modal-mcp && git add \
+cd "$(git rev-parse --show-toplevel)" && git add \
   src/modal_mcp/toolsets/change.py \
   src/modal_mcp/toolsets/__init__.py \
   src/modal_mcp/server.py \
@@ -316,7 +318,7 @@ Regenerate schema snapshot."
 ## Self-review checklist
 
 - [x] **Scope**: Only change.py deleted. expert.py untouched.
-- [x] **Policy engine untouched**: MUTATING_TOOLS, classify_tool expert branch, CHANGE_TOOLSETS, _MUTATING_TOOLSETS all unchanged.
+- [x] **Policy engine untouched**: MUTATING_TOOLS, classify_tool expert branch, CHANGE_TOOLSETS,_MUTATING_TOOLSETS all unchanged.
 - [x] **Expert tests retained**: `test_expert_execute_stub_returns_disabled_capability_error` kept in test_toolsets.py.
 - [x] **Schema verification**: Step 9 asserts change stubs gone AND expert tools still present.
 - [x] **No placeholders**: Every step shows exact file content or exact commands.

@@ -30,6 +30,7 @@ tool.annotations.destructiveHint: bool | None  # True in MUTATING_ANNOTATIONS
 ```
 
 Every toolset already registers with the correct annotations:
+
 - `READ_ONLY_ANNOTATIONS = ToolAnnotations(readOnlyHint=True, idempotentHint=True)` — all read-only toolsets
 - `MUTATING_ANNOTATIONS = ToolAnnotations(readOnlyHint=False, destructiveHint=True)` — `change` and `expert` toolsets
 
@@ -42,14 +43,16 @@ Tags carry the toolset name exactly as used by `evaluate()`: `"apps"`, `"logs"`,
 ## File Structure
 
 Files changed:
-```
+
+```text
 src/modal_mcp/policy/engine.py     # Main change: classify_tool → async method, mcp param
 src/modal_mcp/server.py            # Pass mcp= to PolicyMiddleware
 tests/unit/test_policy.py          # New classify_tool tests; update middleware fixtures
 ```
 
 Files read-only (no changes):
-```
+
+```text
 src/modal_mcp/toolsets/_common.py  # READ_ONLY_ANNOTATIONS / MUTATING_ANNOTATIONS stay as-is
 src/modal_mcp/toolsets/*.py        # All toolset registrations already correct
 src/modal_mcp/policy/rules.py      # evaluate() unchanged; toolset string still required
@@ -146,13 +149,16 @@ src/modal_mcp/policy/rules.py      # evaluate() unchanged; toolset string still 
 - [ ] In `src/modal_mcp/policy/engine.py`:
 
   1. Add `FastMCP` import at the top of the file:
+
      ```python
      from typing import Any
      from fastmcp import FastMCP
      ```
+
      (Note: `Any` is already imported via `from typing import Any` — only add `FastMCP` if not already present.)
 
   2. Add `mcp` as the **first positional parameter** of `PolicyMiddleware.__init__`:
+
      ```python
      def __init__(
          self,
@@ -173,6 +179,7 @@ src/modal_mcp/policy/rules.py      # evaluate() unchanged; toolset string still 
      ```
 
   3. Replace the module-level `classify_tool` function with an async method on the class:
+
      ```python
      async def classify_tool(self, tool_name: str) -> ToolPolicy:
          """Classify a tool using FastMCP annotation metadata.
@@ -200,6 +207,7 @@ src/modal_mcp/policy/rules.py      # evaluate() unchanged; toolset string still 
      ```
 
   4. Update `on_call_tool` to await the method:
+
      ```python
      tool_policy = await self.classify_tool(params.name)
      ```
@@ -220,6 +228,7 @@ src/modal_mcp/policy/rules.py      # evaluate() unchanged; toolset string still 
 The middleware is constructed before `register_toolsets` in `server.py` (lines 395-401), but `classify_tool` is called per-request (at call time), so the middleware only needs to hold a reference to the server — the tools are looked up lazily.
 
 - [ ] In `src/modal_mcp/server.py`, update the `PolicyMiddleware` construction:
+
   ```python
   mcp.add_middleware(
       PolicyMiddleware(
@@ -281,21 +290,27 @@ The existing tests in `test_policy.py` construct `PolicyMiddleware(policy_settin
 By Task 2 the module-level `classify_tool` function is gone. `MUTATING_TOOLS` is intentionally retained as a fallback in the new async method. Confirm cleanup:
 
 - [ ] Verify the old module-level `classify_tool` function no longer exists in `src/`:
+
   ```bash
   grep -n "^def classify_tool" src/modal_mcp/policy/engine.py
   ```
+
   Expected: zero matches (it is now a method, not a module-level function).
 
 - [ ] Verify `MUTATING_TOOLS` is still present (retained as fallback):
+
   ```bash
   grep -n "MUTATING_TOOLS" src/modal_mcp/policy/engine.py
   ```
+
   Expected: at least two matches (the definition and the fallback lookup in `classify_tool`).
 
 - [ ] Verify no substring patterns remain:
+
   ```bash
   grep -n '"log" in tool_name\|"container" in tool_name\|"volume" in tool_name\|"sandbox" in tool_name\|"app" in tool_name\|"deployment" in tool_name' src/modal_mcp/policy/engine.py
   ```
+
   Expected: zero matches.
 
 - [ ] Run full suite: `uv run pytest` — all tests pass.
@@ -307,7 +322,7 @@ By Task 2 the module-level `classify_tool` function is gone. `MUTATING_TOOLS` is
 - [ ] `uv run ruff check .` — zero issues.
 - [ ] `uv run ruff check . --fix` if there are auto-fixable issues, then re-check.
 - [ ] `uv run pytest` — full suite green.
-- [ ] Review `__all__` in `engine.py`: `MUTATING_TOOLS` removed, `classify_tool` removed (it is now a method, not a public function).
+- [ ] Review `__all__` in `engine.py`: `MUTATING_TOOLS` remains exported (it is still consulted as a fallback when `get_tool()` returns `None` — see Task 4 step 6). `classify_tool` is NOT exported (it is now a method on `PolicyMiddleware`, not a public function).
 
 ---
 

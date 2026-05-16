@@ -14,7 +14,7 @@
 
 Files touched by this plan:
 
-```
+```text
 src/modal_mcp/domain/refs.py          ← add RefCodec class; keep encode_ref/decode_ref as wrappers
 src/modal_mcp/adapters/modal_adapter.py ← replace _parse_signing_keys + _signing_keys with _ref_codec
 tests/unit/test_refs.py               ← new file: RefCodec round-trip and delegation tests
@@ -295,10 +295,13 @@ After this step:
 - [ ] In `/Users/runger/workspaces/modal-mcp/src/modal_mcp/adapters/modal_adapter.py`:
 
   Replace:
+
   ```python
   from modal_mcp.domain.refs import decode_ref
   ```
+
   With:
+
   ```python
   from modal_mcp.domain.refs import RefCodec, decode_ref
   ```
@@ -308,6 +311,7 @@ After this step:
 - [ ] Delete the `_parse_signing_keys` function (lines 59-67):
 
   Remove this entire function:
+
   ```python
   def _parse_signing_keys(raw: SecretStr | None) -> tuple[tuple[str, bytes], ...]:
       text = _secret_value(raw)
@@ -323,10 +327,13 @@ After this step:
 ### 3b — Replace \_signing\_keys attribute with \_ref\_codec
 
 - [ ] In `ModalSdkAdapter.__init__`, replace:
+
   ```python
   self._signing_keys = _parse_signing_keys(settings.modal_mcp_signing_keys)
   ```
+
   With:
+
   ```python
   self._ref_codec = _build_ref_codec(settings.modal_mcp_signing_keys)
   ```
@@ -368,15 +375,19 @@ After this step:
 ### 3c — Replace decode\_ref call sites inside ModalSdkAdapter
 
 - [ ] In `_verify_ref_env` (line ~249), replace:
+
   ```python
   payload = decode_ref(ref, expected_env=env, signing_keys=self._signing_keys)
   ```
+
   With:
+
   ```python
   payload = self._ref_codec.decode(ref, expected_env=env)
   ```
 
 - [ ] In `get_app` (lines ~331-335), replace:
+
   ```python
   app_native_id = decode_ref(
       app.app_ref,
@@ -384,7 +395,9 @@ After this step:
       signing_keys=self._signing_keys,
   ).id
   ```
+
   With:
+
   ```python
   app_native_id = self._ref_codec.decode(
       app.app_ref,
@@ -393,14 +406,17 @@ After this step:
   ```
 
 - [ ] Remove `decode_ref` from the import line (it is no longer called directly in the adapter):
+
   ```python
   from modal_mcp.domain.refs import RefCodec
   ```
 
 - [ ] Run tests:
+
   ```bash
   uv run pytest --tb=short -q
   ```
+
   Expected: all tests pass.
 
 ---
@@ -408,23 +424,29 @@ After this step:
 ## Step 4 — Verify no caller outside refs.py constructs raw HMAC tuples for ref operations
 
 - [ ] Confirm no outside module references the old `_parse_signing_keys` function:
+
   ```bash
   grep -rn "_parse_signing_keys" /Users/runger/workspaces/modal-mcp/src/
   ```
+
   Expected: no output.
 
 - [ ] Confirm no outside module passes raw `signing_keys` to `encode_ref` or `decode_ref` (outside of `refs.py` and `normalize.py` itself):
+
   ```bash
   grep -rn "encode_ref\|decode_ref" /Users/runger/workspaces/modal-mcp/src/ \
     | grep -v "domain/refs.py" \
     | grep -v "domain/normalize.py"
   ```
+
   Expected: no output (the adapter no longer calls these functions directly).
 
 - [ ] Confirm test files still only use `SIGNING_KEYS` constant in their own scope (not passing it to adapter internals):
+
   ```bash
   grep -n "signing_keys" /Users/runger/workspaces/modal-mcp/tests/unit/test_modal_adapter.py
   ```
+
   Expected: no matches (the adapter tests use `SIGNING_KEY_TEXT` in `Settings`, not raw tuples injected into the adapter).
 
 ---
@@ -432,18 +454,23 @@ After this step:
 ## Step 5 — Linting and final test run
 
 - [ ] Run ruff:
+
   ```bash
   uv run ruff check .
   ```
+
   Expected: no errors.
 
 - [ ] Run full test suite:
+
   ```bash
   uv run pytest -v
   ```
+
   Expected: all tests pass including the new `test_refs.py`.
 
 - [ ] Commit:
+
   ```bash
   git add \
     src/modal_mcp/domain/refs.py \
