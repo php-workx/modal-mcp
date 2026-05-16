@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 from typing import ClassVar
@@ -85,18 +84,12 @@ class SetupCommand:
     def run(cls, args: argparse.Namespace) -> int:
         yes: bool = getattr(args, "yes", False)
         install_target: str | None = getattr(args, "install", None)
-        dry_run: bool = getattr(args, "dry_run", False)
         env_file_arg: str | None = getattr(args, "env_file", None)
         secrets_dir_arg: str | None = getattr(args, "secrets_dir", None)
         force: bool = getattr(args, "force", False)
 
         if install_target is not None:
-            return cls._install(
-                install_target,
-                env_file_arg=env_file_arg,
-                dry_run=dry_run,
-                yes=yes,
-            )
+            return cls._install(install_target, args)
 
         if yes:
             return cls._generate_files(
@@ -109,72 +102,17 @@ class SetupCommand:
         return 0
 
     @classmethod
-    def _install(
-        cls,
-        target_name: str,
-        *,
-        env_file_arg: str | None,
-        dry_run: bool,
-        yes: bool,
-    ) -> int:
-        """Run the per-target install via the agent_targets registry."""
-        from modal_mcp.agent_targets import get_target
-        from modal_mcp.setup import DEFAULT_ENV_FILE
+    def _install(cls, target_name: str, args: argparse.Namespace) -> int:
+        """Dispatch the install to the named agent target.
 
-        if env_file_arg is not None:
-            resolved_env = Path(env_file_arg).expanduser()
-        else:
-            resolved_env = Path(DEFAULT_ENV_FILE).expanduser().absolute()
+        Each target module owns its own argument parsing and exception
+        handling via :func:`install_from_cli`; this method is a uniform
+        dispatch with no per-target branching.
+        """
+        from modal_mcp.agent_targets import get_target
 
         target = get_target(target_name)
-
-        # Codex (stdio) embeds the env-file path verbatim and so requires
-        # an absolute path; SSE targets (claude) read bind from the env file.
-        if target_name == "codex":
-            if env_file_arg is not None and not resolved_env.is_absolute():
-                print(
-                    f"error: --env-file must be an absolute path for"
-                    f" --install codex; got: {env_file_arg!r}",
-                    file=sys.stderr,
-                )
-                return 1
-            if env_file_arg is None:
-                resolved_env = resolved_env.absolute()
-
-            try:
-                target.install(env_file=resolved_env, dry_run=dry_run, yes=yes)
-            except (Exception, ValueError) as exc:
-                # Re-raise non-install exceptions; install errors map to exit 1.
-                if exc.__class__.__name__ not in {
-                    "CodexInstallError",
-                    "ValueError",
-                }:
-                    raise
-                print(f"error: {exc}", file=sys.stderr)
-                return 1
-            return 0
-
-        # SSE target (claude / claude_desktop)
-        bind: str | None = None
-        if resolved_env.exists():
-            for line in resolved_env.read_text(encoding="utf-8").splitlines():
-                if line.startswith("MODAL_MCP_HTTP_BIND="):
-                    bind = line.split("=", 1)[1].strip()
-                    break
-        if bind is None:
-            bind = os.environ.get("MODAL_MCP_HTTP_BIND")
-
-        try:
-            target.install(bind=bind, dry_run=dry_run, yes=yes)
-        except (Exception, ValueError) as exc:
-            if exc.__class__.__name__ not in {
-                "ClaudeInstallError",
-                "ValueError",
-            }:
-                raise
-            print(f"error: {exc}", file=sys.stderr)
-            return 1
-        return 0
+        return target.install_from_cli(args)
 
     @classmethod
     def _generate_files(

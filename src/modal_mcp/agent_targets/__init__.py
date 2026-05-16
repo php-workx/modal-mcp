@@ -8,6 +8,8 @@ hard-coding ``if name == 'codex'`` branches inside the CLI layer.
 
 from __future__ import annotations
 
+import importlib
+import importlib.util
 from types import ModuleType
 from typing import Final
 
@@ -22,13 +24,14 @@ _TARGETS: Final[dict[str, ModuleType]] = {
     "claude_desktop": claude,  # alias
 }
 
-# Register optional targets only when present.
-try:
-    from modal_mcp.agent_targets import cursor as _cursor
-
+# Register optional targets only when present.  Use ``find_spec`` to detect
+# absence so that real import bugs (SyntaxError, NameError, ImportError
+# raised from inside the module body) propagate instead of being silently
+# swallowed by a bare ``except ImportError``.
+_cursor_spec = importlib.util.find_spec("modal_mcp.agent_targets.cursor")
+if _cursor_spec is not None:
+    _cursor = importlib.import_module("modal_mcp.agent_targets.cursor")
     _TARGETS["cursor"] = _cursor
-except ImportError:
-    pass
 
 TARGETS: Final[tuple[tuple[str, ModuleType], ...]] = tuple(_TARGETS.items())
 

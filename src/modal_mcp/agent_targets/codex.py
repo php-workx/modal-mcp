@@ -68,6 +68,7 @@ Codex config schema — all servers use stdio subprocess launch.
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import os
 import sys
@@ -652,6 +653,53 @@ def install(
     return "installed"
 
 
+#: Concrete exception class raised by :func:`install` on safety-check failure.
+#:
+#: Exposed for the CLI layer so it can catch the install error without
+#: importing the concrete class by name (which couples the CLI to per-target
+#: module internals).  Every agent target module must expose this attribute.
+INSTALL_ERROR: Final[type[Exception]] = CodexInstallError
+
+
+def install_from_cli(args: argparse.Namespace) -> int:
+    """Run the Codex install from a parsed CLI ``args`` namespace.
+
+    Returns an exit code (0 on success, 1 on install failure).  Handles the
+    Codex-specific argument parsing (absolute ``--env-file`` enforcement)
+    and exception mapping so that ``cli/setup.py`` does not need any
+    per-target branching.
+    """
+    from modal_mcp.setup import DEFAULT_ENV_FILE
+
+    env_file_arg: str | None = getattr(args, "env_file", None)
+    dry_run: bool = getattr(args, "dry_run", False)
+    yes: bool = getattr(args, "yes", False)
+
+    if env_file_arg is not None:
+        candidate = Path(env_file_arg).expanduser()
+        # Codex (stdio) embeds the env-file path verbatim, so it must be
+        # absolute.  Silently calling .absolute() on a relative input would
+        # resolve against the CWD of the install process — almost certainly
+        # wrong when Codex later launches modal-mcp from its own CWD.
+        if not candidate.is_absolute():
+            print(
+                f"error: --env-file must be an absolute path for"
+                f" --install codex; got: {env_file_arg!r}",
+                file=sys.stderr,
+            )
+            return 1
+        resolved_env = candidate.absolute()
+    else:
+        resolved_env = Path(DEFAULT_ENV_FILE).expanduser().absolute()
+
+    try:
+        install(env_file=resolved_env, dry_run=dry_run, yes=yes)
+    except (ValueError, INSTALL_ERROR) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
 __all__ = [
     "CODEX_AGENT_NAME",
     "CODEX_BACKUP_SUFFIX_TEMPLATE",
@@ -664,10 +712,12 @@ __all__ = [
     "CODEX_SERVER_NAME",
     "CODEX_TOP_LEVEL_KEY",
     "CODEX_TRANSPORT",
+    "INSTALL_ERROR",
     "AgentTargetContract",
     "CodexInstallError",
     "build_contract",
     "format_config_snippet",
     "install",
+    "install_from_cli",
     "render",
 ]

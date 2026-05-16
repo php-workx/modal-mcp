@@ -108,6 +108,7 @@ path.
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import json
 import os
@@ -141,6 +142,7 @@ __all__ = [
     "CLAUDE_SSE_URL",
     "CLAUDE_TOP_LEVEL_KEY",
     "CLAUDE_TRANSPORT",
+    "INSTALL_ERROR",
     "AgentTargetContract",
     "ClaudeInstallError",
     "build_contract",
@@ -149,6 +151,7 @@ __all__ = [
     "get_claude_config_dir",
     "get_claude_config_path",
     "install",
+    "install_from_cli",
     "render",
 ]
 
@@ -794,3 +797,47 @@ def install(
         file=out,
     )
     return "installed"
+
+
+#: Concrete exception class raised by :func:`install` on safety-check failure.
+#:
+#: Exposed for the CLI layer so it can catch the install error without
+#: importing the concrete class by name (which couples the CLI to per-target
+#: module internals).  Every agent target module must expose this attribute.
+INSTALL_ERROR: Final[type[Exception]] = ClaudeInstallError
+
+
+def install_from_cli(args: argparse.Namespace) -> int:
+    """Run the Claude Desktop install from a parsed CLI ``args`` namespace.
+
+    Returns an exit code (0 on success, 1 on install failure).  Handles the
+    Claude-specific argument parsing (reading the SSE bind from the env file
+    or environment) and exception mapping so that ``cli/setup.py`` does not
+    need any per-target branching.
+    """
+    from modal_mcp.setup import DEFAULT_ENV_FILE
+
+    env_file_arg: str | None = getattr(args, "env_file", None)
+    dry_run: bool = getattr(args, "dry_run", False)
+    yes: bool = getattr(args, "yes", False)
+
+    if env_file_arg is not None:
+        resolved_env = Path(env_file_arg).expanduser().absolute()
+    else:
+        resolved_env = Path(DEFAULT_ENV_FILE).expanduser().absolute()
+
+    bind: str | None = None
+    if resolved_env.exists():
+        for line in resolved_env.read_text(encoding="utf-8").splitlines():
+            if line.startswith("MODAL_MCP_HTTP_BIND="):
+                bind = line.split("=", 1)[1].strip()
+                break
+    if bind is None:
+        bind = os.environ.get("MODAL_MCP_HTTP_BIND")
+
+    try:
+        install(bind=bind, dry_run=dry_run, yes=yes)
+    except (ValueError, INSTALL_ERROR) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    return 0

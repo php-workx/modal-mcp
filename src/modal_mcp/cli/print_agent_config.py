@@ -21,7 +21,7 @@ class PrintAgentConfigCommand:
         )
         parser.add_argument(
             "--target",
-            choices=["claude", "codex"],
+            choices=["claude", "claude_desktop", "codex"],
             default="claude",
             help="Agent target to print config for (default: claude).",
         )
