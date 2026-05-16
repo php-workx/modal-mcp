@@ -143,7 +143,7 @@ class SetupCommand:
 
             try:
                 target.install(env_file=resolved_env, dry_run=dry_run, yes=yes)
-            except (Exception, ValueError) as exc:  # noqa: BLE001
+            except (Exception, ValueError) as exc:
                 # Re-raise non-install exceptions; install errors map to exit 1.
                 if exc.__class__.__name__ not in {
                     "CodexInstallError",
@@ -166,7 +166,7 @@ class SetupCommand:
 
         try:
             target.install(bind=bind, dry_run=dry_run, yes=yes)
-        except (Exception, ValueError) as exc:  # noqa: BLE001
+        except (Exception, ValueError) as exc:
             if exc.__class__.__name__ not in {
                 "ClaudeInstallError",
                 "ValueError",
@@ -223,9 +223,7 @@ class SetupCommand:
     def _print_instructions() -> None:
         print("modal-mcp setup")
         print("-" * 40)
-        print(
-            "Run 'modal-mcp print-agent-config' to see the configuration block,"
-        )
+        print("Run 'modal-mcp print-agent-config' to see the configuration block,")
         print("then merge it into your agent client's config file.")
         print()
         print("To generate .env and a signing key automatically, run:")

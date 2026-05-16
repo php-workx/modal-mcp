@@ -104,7 +104,7 @@ def _pluralise(entity_name: str) -> str:
     return entity_name + "s"
 
 
-def register_read_toolset(  # noqa: UP047
+def register_read_toolset(
     mcp: FastMCP[Any],
     entity_name: str,
     list_fn: Callable[..., tuple[Sequence[_T], list[str]]],

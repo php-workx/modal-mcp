@@ -617,7 +617,7 @@ def install(
                 f"Post-write validation: args mismatch "
                 f"(expected {expected_args!r}, got {server_entry.get('args')!r})"
             )
-    except Exception as exc:  # noqa: BLE001 — validation must catch anything
+    except Exception as exc:
         validation_error = exc
 
     if validation_error is not None:

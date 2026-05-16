@@ -761,7 +761,7 @@ def install(
                 f"Post-write validation: url mismatch "
                 f"(expected {sse_url!r}, got {server_entry.get('url')!r})"
             )
-    except Exception as exc:  # noqa: BLE001 — validation must catch anything
+    except Exception as exc:
         validation_error = exc
 
     if validation_error is not None:

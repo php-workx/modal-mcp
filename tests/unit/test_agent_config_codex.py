@@ -46,6 +46,8 @@ from modal_mcp.agent_targets.codex import (
     CodexInstallError,
     build_contract,
     format_config_snippet,
+)
+from modal_mcp.agent_targets.codex import (
     install as install_codex_config,
 )
 
@@ -53,6 +55,7 @@ from modal_mcp.agent_targets.codex import (
 def print_agent_config(target: str, **kwargs) -> None:
     """Test helper mirroring the old agent_config.print_agent_config surface."""
     get_target(target).render(**kwargs)
+
 
 # ---------------------------------------------------------------------------
 # Field presence and type

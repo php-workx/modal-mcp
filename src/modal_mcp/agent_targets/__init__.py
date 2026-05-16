@@ -47,7 +47,7 @@ def get_target(name: str) -> ModuleType:
 
 
 __all__ = [
-    "AgentTargetContract",
     "TARGETS",
+    "AgentTargetContract",
     "get_target",
 ]
