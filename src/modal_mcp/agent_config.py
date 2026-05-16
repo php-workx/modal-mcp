@@ -39,10 +39,14 @@ import json as _json
 import os
 import sys
 import tempfile
-import tomllib
+import tomllib  # noqa: F401 — kept for backward-compat test monkeypatch path
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TextIO, cast
+
+# Backward-compat re-exports during the collapse-cli-plumbing migration.
+# CodexInstallError now lives in modal_mcp.agent_targets.codex.
+from modal_mcp.agent_targets.codex import CodexInstallError as CodexInstallError
 
 __all__ = [
     "ClaudeInstallError",
@@ -53,26 +57,6 @@ __all__ = [
 ]
 
 TomlTable = dict[str, Any]
-
-
-# ---------------------------------------------------------------------------
-# Exception
-# ---------------------------------------------------------------------------
-
-
-class CodexInstallError(Exception):
-    """Raised when a Codex config install fails a safety check.
-
-    Possible causes include (but are not limited to):
-    - Config directory does not exist (Codex CLI not installed).
-    - Config file is a symlink (refused to follow).
-    - Config file is not a regular file (directory, device, FIFO …).
-    - Config file cannot be parsed as valid TOML.
-    - Top-level config value is not a TOML table.
-    - ``mcp_servers`` value is present but is not a TOML table.
-    - ``mcp_servers.modal-mcp`` already exists with an incompatible entry.
-    - Post-write validation failed (backup restored automatically).
-    """
 
 
 class ClaudeInstallError(Exception):
@@ -154,22 +138,10 @@ def _print_codex_config(
     command: str | None,
     file: TextIO,
 ) -> None:
-    """Emit the Codex TOML config snippet.
+    """DEPRECATED — delegates to :func:`modal_mcp.agent_targets.codex.render`."""
+    from modal_mcp.agent_targets import codex as _codex
 
-    Transport: stdio — Codex launches ``modal-mcp`` as a subprocess.  The
-    ``--env-file`` flag ensures the server finds its settings from any cwd.
-    """
-    from modal_mcp.agent_targets.codex import (
-        CODEX_SERVER_COMMAND,
-        format_config_snippet,
-    )
-
-    resolved_command = command if command is not None else CODEX_SERVER_COMMAND
-    snippet = format_config_snippet(env_file=env_file, command=resolved_command)
-
-    print("# Add this block to ~/.codex/config.toml", file=file)
-    print("# Transport: stdio (Codex launches modal-mcp as a subprocess)", file=file)
-    print(snippet, end="", file=file)
+    _codex.render(env_file=env_file, command=command, file=file)
 
 
 def _print_claude_config(
@@ -252,7 +224,7 @@ def _atomic_write_text(path: Path, content: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Codex install — public API
+# Codex install — public API (delegation shim)
 # ---------------------------------------------------------------------------
 
 
@@ -266,304 +238,18 @@ def install_codex_config(
     file: TextIO | None = None,
     _timestamp: str | None = None,
 ) -> str:
-    """Install the ``[mcp_servers.modal-mcp]`` entry into Codex config.
+    """DEPRECATED — delegates to :func:`modal_mcp.agent_targets.codex.install`."""
+    from modal_mcp.agent_targets import codex as _codex
 
-    The function supports dry-run previews, interactive confirmation,
-    atomic backup, idempotent re-runs, and post-write validation.
-
-    Args:
-        env_file: *Absolute* path to the ``.env`` file.  Embedded in the
-            ``args`` list as ``--env-file <path>`` so that Codex can find the
-            settings regardless of its working directory at launch.
-        command: The ``modal-mcp`` executable to register.  Defaults to
-            :data:`~modal_mcp.agent_targets.codex.CODEX_SERVER_COMMAND`
-            (``"modal-mcp"``).  Pass an absolute path when ``modal-mcp`` is
-            installed outside the system PATH.
-        dry_run: When ``True``, print the target file and the exact change
-            that *would* be made, then return ``"dry_run"`` without touching
-            the filesystem.
-        yes: When ``True``, skip the interactive confirmation prompt.
-        config_path: Override the default install target
-            (``~/.codex/config.toml``).  Useful in tests.
-        file: Output stream for status messages.  Defaults to ``sys.stdout``.
-        _timestamp: Override the timestamp embedded in the backup suffix.
-            Intended for deterministic tests only.
-
-    Returns:
-        One of the following strings:
-
-        ``"installed"``
-            The entry was successfully written to the config file.
-        ``"already_installed"``
-            The entry already existed with the correct command and args —
-            no change was made.
-        ``"declined"``
-            The user declined the confirmation prompt.
-        ``"dry_run"``
-            Dry-run mode was active; no changes were made.
-
-    Raises:
-        ValueError: If *env_file* is not an absolute path.
-        CodexInstallError: If a safety check fails (e.g. config file is a
-            symlink, existing TOML is unparseable, conflicting entry exists).
-    """
-    from modal_mcp.agent_targets.codex import (
-        CODEX_BACKUP_SUFFIX_TEMPLATE,
-        CODEX_SERVER_ARGS_TEMPLATE,
-        CODEX_SERVER_COMMAND,
-        CODEX_SERVER_NAME,
-        CODEX_TOP_LEVEL_KEY,
-        build_contract,
-        format_config_snippet,
+    return _codex.install(
+        env_file=env_file,
+        command=command,
+        dry_run=dry_run,
+        yes=yes,
+        config_path=config_path,
+        file=file,
+        _timestamp=_timestamp,
     )
-
-    out = sys.stdout if file is None else file
-
-    # ------------------------------------------------------------------
-    # 1.  Validate and resolve arguments
-    # ------------------------------------------------------------------
-
-    env_file_path = Path(env_file)
-    if not env_file_path.is_absolute():
-        msg = f"env_file must be an absolute path; got: {env_file!r}"
-        raise ValueError(msg)
-    env_path_str = str(env_file_path)
-
-    resolved_command = command if command is not None else CODEX_SERVER_COMMAND
-    contract = build_contract(resolved_command)
-
-    # Config path: use the expanded representative path (platform-agnostic for Codex).
-    if config_path is None:
-        resolved_config = contract.representative_config_path.expanduser().absolute()
-    else:
-        resolved_config = Path(config_path).absolute()
-
-    # Build the expected rendered args (for idempotency / conflict checks).
-    expected_args: list[str] = [
-        arg.format(env_file=env_path_str) if "{env_file}" in arg else arg
-        for arg in CODEX_SERVER_ARGS_TEMPLATE
-    ]
-
-    # TOML snippet that will be appended.
-    snippet = format_config_snippet(env_file=env_path_str, command=resolved_command)
-
-    # ------------------------------------------------------------------
-    # 2.  Dry-run: show the planned change and exit early.
-    # ------------------------------------------------------------------
-
-    if dry_run:
-        print(f"Target: {resolved_config}", file=out)
-        print(f"Change: {contract.dry_run_description}", file=out)
-        print(file=out)
-        print("Would add to config:", file=out)
-        print(snippet, end="", file=out)
-        return "dry_run"
-
-    # ------------------------------------------------------------------
-    # 3.  Safety checks
-    # ------------------------------------------------------------------
-
-    # Config directory must exist (implies Codex CLI is installed).
-    if not resolved_config.parent.exists():
-        raise CodexInstallError(
-            f"Config directory {resolved_config.parent} does not exist. "
-            "Is Codex CLI installed and has it been run at least once?"
-        )
-
-    # Refuse to write through symlinks.
-    if resolved_config.is_symlink():
-        raise CodexInstallError(
-            f"Config file {resolved_config} is a symlink. "
-            "Refusing to write through a symlink."
-        )
-
-    # Config path, if it exists, must be a regular file.
-    if resolved_config.exists() and not resolved_config.is_file():
-        raise CodexInstallError(
-            f"Config path {resolved_config} exists but is not a regular file. "
-            "Refusing to write."
-        )
-
-    # ------------------------------------------------------------------
-    # 4.  Read and parse existing TOML
-    # ------------------------------------------------------------------
-
-    existing_content: str = ""
-    existing_data: TomlTable = {}
-
-    if resolved_config.exists():
-        try:
-            existing_content = resolved_config.read_text(encoding="utf-8")
-        except OSError as exc:
-            raise CodexInstallError(
-                f"Cannot read config file {resolved_config}: {exc}"
-            ) from exc
-
-        try:
-            existing_data = tomllib.loads(existing_content)
-        except tomllib.TOMLDecodeError as exc:
-            raise CodexInstallError(
-                f"Config file {resolved_config} cannot be parsed as valid TOML: {exc}"
-            ) from exc
-
-        if not isinstance(existing_data, dict):
-            raise CodexInstallError(
-                f"Config file {resolved_config}: top-level value is not a TOML table."
-            )
-
-        if CODEX_TOP_LEVEL_KEY in existing_data and not isinstance(
-            existing_data[CODEX_TOP_LEVEL_KEY], dict
-        ):
-            raise CodexInstallError(
-                f"Config file {resolved_config}: "
-                f"'{CODEX_TOP_LEVEL_KEY}' is present but is not a TOML table."
-            )
-
-    # ------------------------------------------------------------------
-    # 5.  Idempotency / conflict check
-    # ------------------------------------------------------------------
-
-    mcp_servers_value = existing_data.get(CODEX_TOP_LEVEL_KEY, {})
-    if not isinstance(mcp_servers_value, dict):
-        raise CodexInstallError(
-            f"Config file {resolved_config}: "
-            f"'{CODEX_TOP_LEVEL_KEY}' is present but is not a TOML table."
-        )
-    mcp_servers = cast(TomlTable, mcp_servers_value)
-    if CODEX_SERVER_NAME in mcp_servers:
-        existing_entry_value = mcp_servers[CODEX_SERVER_NAME]
-        if not isinstance(existing_entry_value, dict):
-            raise CodexInstallError(
-                f"Config file {resolved_config}: {contract.idempotency_key} "
-                "is present but is not a TOML table."
-            )
-        existing_entry = cast(TomlTable, existing_entry_value)
-        if (
-            existing_entry.get("command") == resolved_command
-            and existing_entry.get("args") == expected_args
-        ):
-            print(
-                f"Already installed: {contract.idempotency_key} in {resolved_config}",
-                file=out,
-            )
-            return "already_installed"
-        else:
-            raise CodexInstallError(
-                f"Config file {resolved_config}: {contract.idempotency_key} "
-                "already exists with an incompatible command or args. "
-                "Remove the existing entry and rerun."
-            )
-
-    # ------------------------------------------------------------------
-    # 6.  Confirmation prompt
-    # ------------------------------------------------------------------
-
-    if not yes:
-        print(f"Target: {resolved_config}", file=out)
-        print("Would add:", file=out)
-        print(snippet, end="", file=out)
-        print(file=out)
-        try:
-            response = input("Proceed? [y/N] ").strip().lower()
-        except EOFError:
-            response = ""
-        if response not in ("y", "yes"):
-            print("Cancelled.", file=out)
-            return "declined"
-
-    # ------------------------------------------------------------------
-    # 7.  Backup existing file
-    # ------------------------------------------------------------------
-
-    backup_path: Path | None = None
-    if resolved_config.exists():
-        timestamp = _timestamp if _timestamp is not None else _make_timestamp()
-        backup_suffix = CODEX_BACKUP_SUFFIX_TEMPLATE.format(timestamp=timestamp)
-        backup_path = resolved_config.parent / (resolved_config.name + backup_suffix)
-        try:
-            _atomic_write_text(backup_path, existing_content)
-        except OSError as exc:
-            raise CodexInstallError(
-                f"Failed to create backup {backup_path}: {exc}"
-            ) from exc
-
-    # ------------------------------------------------------------------
-    # 8.  Build new content and write atomically
-    # ------------------------------------------------------------------
-
-    if resolved_config.exists():
-        # Preserve existing content; append new block with a blank separator.
-        trimmed = existing_content.rstrip("\n")
-        new_content = trimmed + "\n\n" + snippet
-    else:
-        new_content = snippet
-
-    try:
-        _atomic_write_text(resolved_config, new_content)
-    except OSError as exc:
-        raise CodexInstallError(
-            f"Failed to write config file {resolved_config}: {exc}"
-        ) from exc
-
-    # ------------------------------------------------------------------
-    # 9.  Post-write validation (restore backup on failure)
-    # ------------------------------------------------------------------
-
-    validation_error: Exception | None = None
-    try:
-        validated = tomllib.loads(resolved_config.read_text(encoding="utf-8"))
-        server_entry = validated.get(CODEX_TOP_LEVEL_KEY, {}).get(CODEX_SERVER_NAME)
-        if server_entry is None:
-            raise ValueError(
-                f"Post-write validation: {contract.idempotency_key} not found"
-            )
-        if server_entry.get("command") != resolved_command:
-            raise ValueError(
-                f"Post-write validation: command mismatch "
-                f"(expected {resolved_command!r}, got {server_entry.get('command')!r})"
-            )
-        if server_entry.get("args") != expected_args:
-            raise ValueError(
-                f"Post-write validation: args mismatch "
-                f"(expected {expected_args!r}, got {server_entry.get('args')!r})"
-            )
-    except Exception as exc:
-        validation_error = exc
-
-    if validation_error is not None:
-        # Attempt to restore the pre-install state.
-        restore_msg = ""
-        if backup_path is not None and backup_path.exists():
-            # Prior config existed — restore it from the backup.
-            try:
-                _atomic_write_text(
-                    resolved_config, backup_path.read_text(encoding="utf-8")
-                )
-                restore_msg = f" Config restored from backup {backup_path}."
-            except OSError:
-                restore_msg = (
-                    f" Backup restore failed"
-                    f" — please restore manually from {backup_path}."
-                )
-        else:
-            # No prior config existed — remove the freshly-written (invalid) file
-            # so that the filesystem is returned to its pre-install state.
-            with contextlib.suppress(OSError):
-                resolved_config.unlink(missing_ok=True)
-            restore_msg = " Freshly-written config removed (no prior file to restore)."
-        raise CodexInstallError(
-            f"Post-write validation failed: {validation_error}.{restore_msg}"
-        ) from validation_error
-
-    # ------------------------------------------------------------------
-    # 10.  Success
-    # ------------------------------------------------------------------
-
-    print(
-        f"Installed: {contract.idempotency_key} → {resolved_config}",
-        file=out,
-    )
-    return "installed"
 
 
 # ---------------------------------------------------------------------------

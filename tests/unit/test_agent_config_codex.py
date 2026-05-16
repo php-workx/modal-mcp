@@ -1465,7 +1465,7 @@ def test_install_validation_failure_removes_file_when_no_backup(tmp_path: Path) 
     # the post-write validation step; there is no prior-content TOML parse.
     with (
         patch(
-            "modal_mcp.agent_config.tomllib.loads",
+            "modal_mcp.agent_targets.codex.tomllib.loads",
             side_effect=tomllib.TOMLDecodeError("injected"),
         ),
         pytest.raises(CodexInstallError, match=r"[Vv]alidation"),
@@ -1502,7 +1502,7 @@ def test_install_validation_failure_with_backup_restores_original(
     # Inject a validation error in the post-write step.
     with (
         patch(
-            "modal_mcp.agent_config.tomllib.loads",
+            "modal_mcp.agent_targets.codex.tomllib.loads",
             side_effect=tomllib.TOMLDecodeError("injected"),
         ),
         pytest.raises(CodexInstallError, match=r"[Vv]alidation"),
