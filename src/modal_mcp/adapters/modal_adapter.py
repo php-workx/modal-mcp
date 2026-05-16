@@ -8,8 +8,7 @@ from collections.abc import AsyncIterator, Callable, Iterable, Mapping, Sequence
 from datetime import datetime
 from typing import Any
 
-from pydantic import SecretStr
-
+from modal_mcp.adapters.credentials import ModalCredentials
 from modal_mcp.config import Settings
 from modal_mcp.domain.errors import ErrorCode, ModalAdapterError
 from modal_mcp.domain.models import (
@@ -33,7 +32,7 @@ from modal_mcp.domain.normalize import (
     VolumeNormalizer,
     WorkspaceNormalizer,
 )
-from modal_mcp.domain.refs import RefCodec, parse_signing_keys
+from modal_mcp.domain.refs import RefCodec
 
 ClientFactory = Callable[[], Any]
 
@@ -46,20 +45,6 @@ TRANSIENT_ERROR_NAMES = frozenset(
         "Unavailable",
     }
 )
-
-
-def _secret_value(value: SecretStr | None) -> str | None:
-    if value is None:
-        return None
-    return value.get_secret_value()
-
-
-def _build_ref_codec(raw: SecretStr | None) -> RefCodec:
-    """Build a RefCodec from the signing-keys secret."""
-    text = _secret_value(raw)
-    if not text:
-        raise ValueError("MODAL_MCP_SIGNING_KEYS is required to build RefCodec")
-    return RefCodec(parse_signing_keys(text))
 
 
 def _is_transient_error(exc: BaseException) -> bool:
@@ -124,6 +109,44 @@ class ModalRpcClient:
     ) -> None:
         self._client = client
         self._client_factory = client_factory
+
+    @classmethod
+    async def from_credentials(
+        cls,
+        creds: ModalCredentials,
+        *,
+        client_factory: ClientFactory | None = None,
+    ) -> ModalRpcClient:
+        """Construct a ModalRpcClient from resolved credentials.
+
+        Instantiates the Modal SDK client via ``modal.Client.from_credentials.aio``
+        and runs a cheap ``WorkspaceNameLookup`` auth probe before returning.
+        Auth failures surface as :class:`ModalAdapterError(UPSTREAM_ERROR)`.
+        """
+        try:
+            import modal
+        except ImportError as exc:  # pragma: no cover - dependency guard
+            msg = "Modal SDK is not installed"
+            raise ModalAdapterError(ErrorCode.INTERNAL_DRIFT, msg) from exc
+
+        client = await modal.Client.from_credentials.aio(
+            creds.token_id.get_secret_value(),
+            creds.token_secret.get_secret_value(),
+        )
+        rpc = cls(client, client_factory=client_factory)
+        try:
+            rpc.call("WorkspaceNameLookup", rpc.request("Empty"))
+        except ModalAdapterError:
+            raise
+        except Exception as exc:
+            msg = (
+                f"Modal auth probe failed for credentials ({creds.describe()}): "
+                f"{type(exc).__name__}"
+            )
+            raise ModalAdapterError(
+                ErrorCode.UPSTREAM_ERROR, msg, retryable=False
+            ) from exc
+        return rpc
 
     def call(self, method_name: str, request: Any | None = None) -> Any:
         """Call a Modal RPC, reconnecting once for transient channel failures."""
@@ -207,10 +230,11 @@ class ModalSdkAdapter:
         self,
         settings: Settings,
         rpc: ModalRpcClient,
+        ref_codec: RefCodec,
     ) -> None:
         self._settings = settings
         self._rpc = rpc
-        self._ref_codec = _build_ref_codec(settings.modal_mcp_signing_keys)
+        self._ref_codec = ref_codec
         keys = self._signing_keys
         self._workspace_normalizer = WorkspaceNormalizer(signing_keys=keys)
         self._environment_normalizer = EnvironmentNormalizer(signing_keys=keys)
@@ -231,30 +255,18 @@ class ModalSdkAdapter:
         cls,
         settings: Settings,
         *,
-        client: Any | None = None,
-        client_factory: ClientFactory | None = None,
+        client: Any,
+        ref_codec: RefCodec,
     ) -> ModalSdkAdapter:
-        """Create an adapter from injected fakes or the Modal SDK client."""
-        if client is None:
-            if client_factory is not None:
-                client = _maybe_await(client_factory())
-            else:
-                client = await cls._create_modal_client(settings)
-        rpc = ModalRpcClient(client, client_factory=client_factory)
-        return cls(settings, rpc)
+        """Pure assembly: wrap client in ModalRpcClient, store codec, build normalizers.
 
-    @staticmethod
-    async def _create_modal_client(settings: Settings) -> Any:
-        token_id = _secret_value(settings.modal_token_id)
-        token_secret = _secret_value(settings.modal_token_secret)
-        try:
-            import modal
-        except ImportError as exc:  # pragma: no cover - dependency guard
-            msg = "Modal SDK is not installed"
-            raise ModalAdapterError(ErrorCode.INTERNAL_DRIFT, msg) from exc
-        if token_id and token_secret:
-            return await modal.Client.from_credentials.aio(token_id, token_secret)
-        return await modal.Client.from_env.aio()
+        Credential resolution and client construction are *not* this class's
+        responsibility — they happen in ``CredentialSource.resolve`` and
+        ``ModalRpcClient.from_credentials``, orchestrated from
+        ``server._default_adapter_factory`` (or a test bootstrapper).
+        """
+        rpc = client if isinstance(client, ModalRpcClient) else ModalRpcClient(client)
+        return cls(settings, rpc, ref_codec)
 
     async def aclose(self) -> None:
         """Close the underlying Modal client via the RPC transport layer."""
