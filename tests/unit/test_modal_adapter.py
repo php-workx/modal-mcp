@@ -466,6 +466,10 @@ async def test_adapter_normalize_calls_do_not_pass_signing_keys(
     # Strip the __init__ method body (where signing_keys IS passed to normalizer ctors)
     # We check that no call-site in the *rest* of the class passes signing_keys=
     init_end = source.find("def validate_auth")
+    assert init_end != -1, (
+        "anchor 'def validate_auth' not found in ModalSdkAdapter source; "
+        "update the anchor to a method that still exists in the class"
+    )
     post_init_source = source[init_end:]
     assert "signing_keys=" not in post_init_source, (
         "signing_keys= found outside __init__; "
