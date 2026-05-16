@@ -301,6 +301,105 @@ async def test_modal_rpc_client_call_raises_after_two_failures(
 
 
 @pytest.mark.asyncio
+async def test_create_requires_explicit_ref_codec(
+    modal_config_path: Path,
+) -> None:
+    """ModalSdkAdapter.create accepts a pre-built RefCodec; no fallback parsing."""
+    from modal_mcp.adapters.modal_adapter import ModalRpcClient
+    from modal_mcp.domain.refs import RefCodec
+
+    ref_codec = RefCodec(SIGNING_KEYS)
+    client = FakeClient(FakeStub())
+    rpc = ModalRpcClient(client)
+
+    adapter = await ModalSdkAdapter.create(
+        settings(modal_config_path),
+        client=client,
+        ref_codec=ref_codec,
+    )
+
+    # The adapter exposes whoami via its assembled normalizer
+    assert adapter.whoami().name == "acme"
+    # Internal: ref_codec is stored as-is (not rebuilt from settings)
+    assert adapter._ref_codec is ref_codec
+    # rpc helper unused in this test but importing it ensures the assembly
+    # path still recognises a ModalRpcClient identity.
+    del rpc
+
+
+@pytest.mark.asyncio
+async def test_create_no_longer_accepts_client_factory(
+    modal_config_path: Path,
+) -> None:
+    """ModalSdkAdapter.create no longer accepts client_factory (moved to RPC)."""
+    from modal_mcp.domain.refs import RefCodec
+
+    with pytest.raises(TypeError, match="client_factory"):
+        await ModalSdkAdapter.create(
+            settings(modal_config_path),
+            client=FakeClient(FakeStub()),
+            ref_codec=RefCodec(SIGNING_KEYS),
+            client_factory=lambda: FakeClient(FakeStub()),  # type: ignore[call-arg]
+        )
+
+
+@pytest.mark.asyncio
+async def test_modal_rpc_client_from_credentials_uses_from_credentials_aio(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ModalRpcClient.from_credentials calls modal.Client.from_credentials.aio."""
+    from modal_mcp.adapters.credentials import ModalCredentials
+    from modal_mcp.adapters.modal_adapter import ModalRpcClient
+
+    import modal
+
+    factory = FakeModalFactory(FakeClient(FakeStub()))
+    monkeypatch.setattr(modal.Client, "from_credentials", factory)
+
+    creds = ModalCredentials(
+        token_id=SecretStr("ak-1"),
+        token_secret=SecretStr("as-1"),
+        source="env",
+        profile=None,
+    )
+    rpc = await ModalRpcClient.from_credentials(creds)
+
+    # The Modal SDK was called with the credential tuple
+    assert factory.aio_calls == [("ak-1", "as-1")]
+    # The returned rpc is wired to the fake client
+    assert rpc.request("Empty") is not None
+
+
+@pytest.mark.asyncio
+async def test_modal_rpc_client_from_credentials_validates_auth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ModalRpcClient.from_credentials runs a WorkspaceNameLookup ping."""
+    from modal_mcp.adapters.credentials import ModalCredentials
+    from modal_mcp.adapters.modal_adapter import ModalRpcClient
+
+    import modal
+
+    stub = FakeStub()
+    monkeypatch.setattr(
+        modal.Client,
+        "from_credentials",
+        FakeModalFactory(FakeClient(stub)),
+    )
+
+    creds = ModalCredentials(
+        token_id=SecretStr("ak-1"),
+        token_secret=SecretStr("as-1"),
+        source="env",
+        profile=None,
+    )
+    await ModalRpcClient.from_credentials(creds)
+
+    # Auth probe ran exactly once on construction
+    assert len(stub.requests) == 1
+
+
+@pytest.mark.asyncio
 async def test_call_with_reconnect_raises_retryable_without_factory(
     modal_config_path: Path,
 ) -> None:
