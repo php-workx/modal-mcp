@@ -26,7 +26,14 @@ class VolumeText(BaseModel):
 
 
 def register_volume_tools(mcp: FastMCP[Any]) -> None:
-    """Register volume tools with read-only annotations."""
+    """Register volume tools with read-only annotations.
+
+    All four tools keep custom registration:
+    • modal_list_volumes: adapter returns list[VolumeSummary] (no warnings
+      tuple), so it does not match the register_read_toolset list_fn contract.
+    • modal_ls_volume, modal_read_volume_text, modal_stat_volume_path: volume-
+      path params outside the standard list/get pattern (scope boundary).
+    """
 
     @mcp.tool(
         name="modal_list_volumes",

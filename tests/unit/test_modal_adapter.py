@@ -254,6 +254,53 @@ async def test_call_with_reconnect_retries_once(modal_config_path: Path) -> None
 
 
 @pytest.mark.asyncio
+async def test_modal_rpc_client_call_retries_once(modal_config_path: Path) -> None:
+    """ModalRpcClient.call reconnects via factory and retries exactly once."""
+    from modal_mcp.adapters.modal_adapter import ModalRpcClient
+
+    first_stub = FakeStub()
+    first_stub.fail_once = True
+    second_stub = FakeStub()
+    first_client = FakeClient(first_stub)
+    second_client = FakeClient(second_stub)
+
+    rpc = ModalRpcClient(first_client, client_factory=lambda: second_client)
+
+    # ModalRpcClient.call takes (method_name, request); request lives on rpc too
+    request = rpc.request("Empty")
+    result = rpc.call("WorkspaceNameLookup", request)
+
+    assert result["workspace_name"] == "acme"
+    assert len(first_stub.requests) == 1  # one attempt before transient failure
+    assert len(second_stub.requests) == 1  # one retry on new client
+
+
+@pytest.mark.asyncio
+async def test_modal_rpc_client_call_raises_after_two_failures(
+    modal_config_path: Path,
+) -> None:
+    """ModalRpcClient.call raises ModalAdapterError when retry after reconnect fails."""
+    from modal_mcp.adapters.modal_adapter import ModalRpcClient
+
+    first_stub = FakeStub()
+    first_stub.fail_once = True
+    second_stub = FakeStub()
+    second_stub.fail_once = True
+    first_client = FakeClient(first_stub)
+    second_client = FakeClient(second_stub)
+
+    rpc = ModalRpcClient(first_client, client_factory=lambda: second_client)
+    request = rpc.request("Empty")
+
+    with pytest.raises(ModalAdapterError) as exc_info:
+        rpc.call("WorkspaceNameLookup", request)
+
+    assert exc_info.value.code == "UPSTREAM_ERROR"
+    assert exc_info.value.retryable is True
+    assert "after reconnect" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
 async def test_call_with_reconnect_raises_retryable_without_factory(
     modal_config_path: Path,
 ) -> None:
@@ -400,3 +447,31 @@ async def test_list_apps_returns_partial_results_with_warnings(
     assert apps[0].name == "api"
     assert len(warnings) == 1
     assert "app id is required" in warnings[0]
+
+
+@pytest.mark.asyncio
+async def test_adapter_normalize_calls_do_not_pass_signing_keys(
+    modal_config_path: Path,
+) -> None:
+    """After Task 8: ModalSdkAdapter no longer passes signing_keys at call sites.
+
+    All normalize_* calls are gone; the adapter delegates entirely to the
+    normalizer instances that were constructed with signing_keys in __init__.
+    """
+    import inspect
+
+    import modal_mcp.adapters.modal_adapter as mod
+
+    source = inspect.getsource(mod.ModalSdkAdapter)
+    # Strip the __init__ method body (where signing_keys IS passed to normalizer ctors)
+    # We check that no call-site in the *rest* of the class passes signing_keys=
+    init_end = source.find("def validate_auth")
+    assert init_end != -1, (
+        "anchor 'def validate_auth' not found in ModalSdkAdapter source; "
+        "update the anchor to a method that still exists in the class"
+    )
+    post_init_source = source[init_end:]
+    assert "signing_keys=" not in post_init_source, (
+        "signing_keys= found outside __init__; "
+        "all signing key wiring must live in __init__, not call sites"
+    )

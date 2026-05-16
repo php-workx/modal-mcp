@@ -34,7 +34,12 @@ class ServerInfo(BaseModel):
 
 
 def register_discovery_tools(mcp: FastMCP[Any], settings: Settings) -> None:
-    """Register discovery tools with read-only annotations."""
+    """Register discovery tools with read-only annotations.
+
+    All tools use custom registration: modal_list_environments takes no
+    environment_name param (environments are global), and modal_discovery_server_info,
+    modal_whoami, and modal_list_workspaces also don't follow the list/get pattern.
+    """
 
     @mcp.tool(
         name="modal_discovery_server_info",
@@ -82,10 +87,10 @@ def register_discovery_tools(mcp: FastMCP[Any], settings: Settings) -> None:
         annotations=READ_ONLY_ANNOTATIONS,
     )
     def modal_get_environment(environment_name: str) -> ToolEnvelope[Environment]:
-        environment = get_modal_adapter().get_environment(environment_name)
-        if environment is None:
+        env = get_modal_adapter().get_environment(environment_name)
+        if env is None:
             return not_found(f"environment not found: {environment_name}")
-        return envelope(environment)
+        return envelope(env)
 
 
 def _package_version() -> str:

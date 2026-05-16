@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import mcp.types as mt
+from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_access_token, get_http_request
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import ToolResult
@@ -22,7 +23,7 @@ from modal_mcp.policy.approval import (
     ApprovalTokenLedger,
 )
 from modal_mcp.policy.rate_limit import TokenBucketRateLimiter, rate_limit_key
-from modal_mcp.policy.rules import PolicyDecision, evaluate
+from modal_mcp.policy.rules import CHANGE_TOOLSETS, PolicyDecision, evaluate
 
 MUTATING_TOOLS = frozenset(
     {
@@ -72,6 +73,7 @@ class PolicyMiddleware(Middleware):
 
     def __init__(
         self,
+        mcp: FastMCP[Any],
         settings: Settings,
         *,
         approval_ledger: ApprovalTokenLedger | None = None,
@@ -82,6 +84,7 @@ class PolicyMiddleware(Middleware):
         signing_keys: Sequence[tuple[str, bytes]] | None = None,
         now: Callable[[], int] | None = None,
     ) -> None:
+        self._mcp = mcp
         self.settings = settings
         self.approval_ledger = approval_ledger or ApprovalTokenLedger(
             settings.modal_mcp_approval_ledger
@@ -110,7 +113,7 @@ class PolicyMiddleware(Middleware):
         policy_args = self._argument_adapter.validate_python(arguments)
         actor = self.actor_resolver(context)
         mcp_session_id = resolve_mcp_session_id(context)
-        tool_policy = classify_tool(params.name)
+        tool_policy = await self.classify_tool(params.name)
         if tool_policy.mutating:
             arguments["dry_run"] = policy_args.dry_run
 
@@ -150,6 +153,29 @@ class PolicyMiddleware(Middleware):
             raise
         self._record("record_result", context, params.name, result)
         return redact_tool_result(result, known_secrets=self.known_secrets)
+
+    async def classify_tool(self, tool_name: str) -> ToolPolicy:
+        """Infer policy metadata from tool annotations, with MUTATING_TOOLS fallback."""
+
+        tool = await self._mcp.get_tool(tool_name)
+        if tool is None:
+            # Tool not in FastMCP registry (never registered, or currently
+            # disabled via mcp.disable()). Fail closed: treat as mutating so
+            # the approval gate fires. Disabled tools will subsequently fail at
+            # call_next() — the approval is superfluous but harmless.
+            # MUTATING_TOOLS provides the toolset label.
+            mutating = True
+            toolset = "change" if tool_name in MUTATING_TOOLS else "discovery"
+            return ToolPolicy(tool_name=tool_name, toolset=toolset, mutating=mutating)
+        tags = sorted(tool.tags)
+        toolset = next(
+            (t for t in tags if t in CHANGE_TOOLSETS),
+            None,
+        ) or next(iter(tags), "discovery")
+        annotations = tool.annotations
+        if annotations is not None and annotations.destructiveHint is True:
+            return ToolPolicy(tool_name=tool_name, toolset=toolset, mutating=True)
+        return ToolPolicy(tool_name=tool_name, toolset=toolset, mutating=False)
 
     def _enforce_rate_limits(
         self,
@@ -241,25 +267,6 @@ class PolicyMiddleware(Middleware):
         if hook is None:
             return
         hook(*args)
-
-
-def classify_tool(tool_name: str) -> ToolPolicy:
-    """Infer policy metadata from the server's curated tool naming scheme."""
-
-    if tool_name in MUTATING_TOOLS:
-        toolset = "expert" if tool_name.startswith("modal_expert_") else "change"
-        return ToolPolicy(tool_name=tool_name, toolset=toolset, mutating=True)
-    if "log" in tool_name:
-        return ToolPolicy(tool_name=tool_name, toolset="logs", mutating=False)
-    if "container" in tool_name:
-        return ToolPolicy(tool_name=tool_name, toolset="containers", mutating=False)
-    if "volume" in tool_name:
-        return ToolPolicy(tool_name=tool_name, toolset="volumes", mutating=False)
-    if "sandbox" in tool_name:
-        return ToolPolicy(tool_name=tool_name, toolset="sandboxes", mutating=False)
-    if "app" in tool_name or "deployment" in tool_name:
-        return ToolPolicy(tool_name=tool_name, toolset="apps", mutating=False)
-    return ToolPolicy(tool_name=tool_name, toolset="discovery", mutating=False)
 
 
 def resolve_middleware_actor(context: MiddlewareContext[Any]) -> ApprovalActor:
@@ -386,7 +393,6 @@ __all__ = [
     "PolicyCallArguments",
     "PolicyMiddleware",
     "ToolPolicy",
-    "classify_tool",
     "extract_target_refs",
     "redact_tool_result",
     "redact_value",

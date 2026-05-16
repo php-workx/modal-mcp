@@ -1154,94 +1154,6 @@
       "name": "modal_get_container",
       "output_schema": {
         "$defs": {
-          "Container": {
-            "description": "Task container summary returned by the adapter.",
-            "properties": {
-              "app_ref": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
-              "container_ref": {
-                "type": "string"
-              },
-              "finished_at": {
-                "anyOf": [
-                  {
-                    "format": "date-time",
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
-              "function_call_id": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
-              "function_id": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
-              "region": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
-              "started_at": {
-                "anyOf": [
-                  {
-                    "format": "date-time",
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
-              "state": {
-                "type": "string"
-              },
-              "task_id": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "container_ref",
-              "state",
-              "task_id"
-            ],
-            "type": "object"
-          },
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
@@ -1300,14 +1212,6 @@
         },
         "properties": {
           "data": {
-            "anyOf": [
-              {
-                "$ref": "#/$defs/Container"
-              },
-              {
-                "type": "null"
-              }
-            ],
             "default": null
           },
           "error": {
@@ -2937,94 +2841,6 @@
       "name": "modal_list_containers",
       "output_schema": {
         "$defs": {
-          "Container": {
-            "description": "Task container summary returned by the adapter.",
-            "properties": {
-              "app_ref": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
-              "container_ref": {
-                "type": "string"
-              },
-              "finished_at": {
-                "anyOf": [
-                  {
-                    "format": "date-time",
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
-              "function_call_id": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
-              "function_id": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
-              "region": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
-              "started_at": {
-                "anyOf": [
-                  {
-                    "format": "date-time",
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
-              "state": {
-                "type": "string"
-              },
-              "task_id": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "container_ref",
-              "state",
-              "task_id"
-            ],
-            "type": "object"
-          },
           "ErrorCode": {
             "description": "Normalized public error codes exposed by the adapter.",
             "enum": [
@@ -3079,47 +2895,10 @@
               "message"
             ],
             "type": "object"
-          },
-          "Page_Container_": {
-            "properties": {
-              "items": {
-                "items": {
-                  "$ref": "#/$defs/Container"
-                },
-                "type": "array"
-              },
-              "next_cursor": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
-              "truncated": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "items",
-              "truncated"
-            ],
-            "type": "object"
           }
         },
         "properties": {
           "data": {
-            "anyOf": [
-              {
-                "$ref": "#/$defs/Page_Container_"
-              },
-              {
-                "type": "null"
-              }
-            ],
             "default": null
           },
           "error": {

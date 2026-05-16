@@ -6,7 +6,7 @@ import importlib
 import inspect
 from collections.abc import AsyncIterator, Callable, Iterable, Mapping, Sequence
 from datetime import datetime
-from typing import Any, TypeVar
+from typing import Any
 
 from pydantic import SecretStr
 
@@ -24,18 +24,16 @@ from modal_mcp.domain.models import (
     Workspace,
 )
 from modal_mcp.domain.normalize import (
-    normalize_app,
-    normalize_container,
-    normalize_deployment,
-    normalize_environment,
-    normalize_log_batch,
-    normalize_sandbox,
-    normalize_volume,
-    normalize_workspace,
+    AppNormalizer,
+    ContainerNormalizer,
+    DeploymentNormalizer,
+    EnvironmentNormalizer,
+    LogBatchNormalizer,
+    SandboxNormalizer,
+    VolumeNormalizer,
+    WorkspaceNormalizer,
 )
-from modal_mcp.domain.refs import decode_ref
-
-_T = TypeVar("_T")
+from modal_mcp.domain.refs import RefCodec, parse_signing_keys
 
 ClientFactory = Callable[[], Any]
 
@@ -56,15 +54,12 @@ def _secret_value(value: SecretStr | None) -> str | None:
     return value.get_secret_value()
 
 
-def _parse_signing_keys(raw: SecretStr | None) -> tuple[tuple[str, bytes], ...]:
+def _build_ref_codec(raw: SecretStr | None) -> RefCodec:
+    """Build a RefCodec from the signing-keys secret."""
     text = _secret_value(raw)
     if not text:
-        return ()
-    keys: list[tuple[str, bytes]] = []
-    for item in text.split(","):
-        kid, hex_key = item.split(":", 1)
-        keys.append((kid.strip(), bytes.fromhex(hex_key.strip())))
-    return tuple(keys)
+        raise ValueError("MODAL_MCP_SIGNING_KEYS is required to build RefCodec")
+    return RefCodec(parse_signing_keys(text))
 
 
 def _is_transient_error(exc: BaseException) -> bool:
@@ -114,108 +109,24 @@ def _empty_request() -> Any:
     return empty_pb2.Empty()
 
 
-class ModalSdkAdapter:
-    """Read-only Modal adapter backed by an injected or real Modal client."""
+class ModalRpcClient:
+    """Owns transport: client lifecycle, reconnect, and proto request construction.
+
+    This class is intentionally narrow: it knows nothing about normalizers,
+    environment names, or ref decoding. Those concerns live in ModalSdkAdapter.
+    """
 
     def __init__(
         self,
-        settings: Settings,
         client: Any,
         *,
         client_factory: ClientFactory | None = None,
     ) -> None:
-        self._settings = settings
         self._client = client
         self._client_factory = client_factory
-        self._signing_keys = _parse_signing_keys(settings.modal_mcp_signing_keys)
 
-    @classmethod
-    async def create(
-        cls,
-        settings: Settings,
-        *,
-        client: Any | None = None,
-        client_factory: ClientFactory | None = None,
-    ) -> ModalSdkAdapter:
-        """Create an adapter from injected fakes or the Modal SDK client."""
-
-        if client is None:
-            if client_factory is not None:
-                client = _maybe_await(client_factory())
-            else:
-                client = await cls._create_modal_client(settings)
-        return cls(settings, client, client_factory=client_factory)
-
-    @staticmethod
-    async def _create_modal_client(settings: Settings) -> Any:
-        token_id = _secret_value(settings.modal_token_id)
-        token_secret = _secret_value(settings.modal_token_secret)
-        try:
-            import modal
-        except ImportError as exc:  # pragma: no cover - dependency guard
-            msg = "Modal SDK is not installed"
-            raise ModalAdapterError(ErrorCode.INTERNAL_DRIFT, msg) from exc
-        if token_id and token_secret:
-            return await modal.Client.from_credentials.aio(token_id, token_secret)
-        return await modal.Client.from_env.aio()
-
-    async def aclose(self) -> None:
-        """Close the underlying Modal client if it exposes a close hook."""
-
-        public_close = getattr(self._client, "aclose", None)
-        if public_close is not None:
-            result = public_close()
-            if inspect.isawaitable(result):
-                await result
-            return
-
-        private_close = getattr(self._client, "_close", None)
-        if private_close is None:
-            return
-
-        private_close_aio = getattr(private_close, "aio", None)
-        if private_close_aio is not None:
-            await private_close_aio()
-            return
-
-        close = private_close
-        result = close()
-        if inspect.isawaitable(result):
-            await result
-
-    @property
-    def _stub(self) -> Any:
-        return getattr(self._client, "stub", self._client)
-
-    def _request(self, request_type: str, **fields: Any) -> Any:
-        payload = {key: value for key, value in fields.items() if value is not None}
-        if request_type == "Empty":
-            return _empty_request()
-        try:
-            from modal_proto import api_pb2
-        except ImportError:
-            return payload
-        request_cls = getattr(api_pb2, request_type, None)
-        if request_cls is None:
-            return payload
-        try:
-            return request_cls(**payload)
-        except ValueError:
-            return payload
-
-    def _call_rpc(self, method_name: str, request: Any | None = None) -> Any:
-        method = getattr(self._stub, method_name)
-        if request is None:
-            return method()
-        return method(request)
-
-    def _call_with_reconnect(
-        self,
-        method_name: str,
-        request: Any | None = None,
-    ) -> Any:
+    def call(self, method_name: str, request: Any | None = None) -> Any:
         """Call a Modal RPC, reconnecting once for transient channel failures."""
-
         try:
             return self._call_rpc(method_name, request)
         except Exception as exc:
@@ -239,6 +150,116 @@ class ModalSdkAdapter:
                     retryable=True,
                 ) from retry_exc
 
+    def request(self, request_type: str, **fields: Any) -> Any:
+        """Build a proto (or plain dict) request message."""
+        payload = {key: value for key, value in fields.items() if value is not None}
+        if request_type == "Empty":
+            return _empty_request()
+        try:
+            from modal_proto import api_pb2
+        except ImportError:
+            return payload
+        request_cls = getattr(api_pb2, request_type, None)
+        if request_cls is None:
+            return payload
+        try:
+            return request_cls(**payload)
+        except ValueError:
+            return payload
+
+    async def aclose(self) -> None:
+        """Close the underlying Modal client if it exposes a close hook."""
+        public_close = getattr(self._client, "aclose", None)
+        if public_close is not None:
+            result = public_close()
+            if inspect.isawaitable(result):
+                await result
+            return
+
+        private_close = getattr(self._client, "_close", None)
+        if private_close is None:
+            return
+
+        private_close_aio = getattr(private_close, "aio", None)
+        if private_close_aio is not None:
+            await private_close_aio()
+            return
+
+        result = private_close()
+        if inspect.isawaitable(result):
+            await result
+
+    @property
+    def _stub(self) -> Any:
+        return getattr(self._client, "stub", self._client)
+
+    def _call_rpc(self, method_name: str, request: Any | None = None) -> Any:
+        method = getattr(self._stub, method_name)
+        if request is None:
+            return method()
+        return method(request)
+
+
+class ModalSdkAdapter:
+    """Read-only Modal adapter backed by an injected or real Modal client."""
+
+    def __init__(
+        self,
+        settings: Settings,
+        rpc: ModalRpcClient,
+    ) -> None:
+        self._settings = settings
+        self._rpc = rpc
+        self._ref_codec = _build_ref_codec(settings.modal_mcp_signing_keys)
+        keys = self._signing_keys
+        self._workspace_normalizer = WorkspaceNormalizer(signing_keys=keys)
+        self._environment_normalizer = EnvironmentNormalizer(signing_keys=keys)
+        self._app_normalizer = AppNormalizer(signing_keys=keys)
+        self._container_normalizer = ContainerNormalizer(signing_keys=keys)
+        self._volume_normalizer = VolumeNormalizer(signing_keys=keys)
+        self._sandbox_normalizer = SandboxNormalizer(signing_keys=keys)
+        self._deployment_normalizer = DeploymentNormalizer(signing_keys=keys)
+        self._log_normalizer = LogBatchNormalizer(signing_keys=keys)
+
+    @property
+    def _signing_keys(self) -> tuple[tuple[str, bytes], ...]:
+        """Bridge: expose raw key tuples for callers that predate RefCodec."""
+        return self._ref_codec.signing_key_pairs()
+
+    @classmethod
+    async def create(
+        cls,
+        settings: Settings,
+        *,
+        client: Any | None = None,
+        client_factory: ClientFactory | None = None,
+    ) -> ModalSdkAdapter:
+        """Create an adapter from injected fakes or the Modal SDK client."""
+        if client is None:
+            if client_factory is not None:
+                client = _maybe_await(client_factory())
+            else:
+                client = await cls._create_modal_client(settings)
+        rpc = ModalRpcClient(client, client_factory=client_factory)
+        return cls(settings, rpc)
+
+    @staticmethod
+    async def _create_modal_client(settings: Settings) -> Any:
+        token_id = _secret_value(settings.modal_token_id)
+        token_secret = _secret_value(settings.modal_token_secret)
+        try:
+            import modal
+        except ImportError as exc:  # pragma: no cover - dependency guard
+            msg = "Modal SDK is not installed"
+            raise ModalAdapterError(ErrorCode.INTERNAL_DRIFT, msg) from exc
+        if token_id and token_secret:
+            return await modal.Client.from_credentials.aio(token_id, token_secret)
+        return await modal.Client.from_env.aio()
+
+    async def aclose(self) -> None:
+        """Close the underlying Modal client via the RPC transport layer."""
+        await self._rpc.aclose()
+
     def _environment_name(self, environment_name: str | None = None) -> str | None:
         return environment_name or self._settings.modal_environment
 
@@ -246,7 +267,7 @@ class ModalSdkAdapter:
         """Decode a public ref and enforce the requested environment."""
 
         env = expected_env or self._settings.modal_environment
-        payload = decode_ref(ref, expected_env=env, signing_keys=self._signing_keys)
+        payload = self._ref_codec.decode(ref, expected_env=env)
         return payload.id
 
     def _native_id(self, value: str, expected_env: str | None = None) -> str:
@@ -254,31 +275,23 @@ class ModalSdkAdapter:
             return self._verify_ref_env(value, expected_env=expected_env)
         return value
 
-    @staticmethod
-    def _normalize_safely(
-        normalize_fn: Callable[[Any], _T],
-        items: list[Any],
-    ) -> tuple[list[_T], list[str]]:
-        """Normalize items one-by-one; collect failures as warnings."""
-        results: list[_T] = []
-        warnings: list[str] = []
-        for item in items:
-            try:
-                results.append(normalize_fn(item))
-            except ValueError as exc:
-                warnings.append(str(exc))
-        return results, warnings
-
     def validate_auth(self) -> None:
         """Verify that the current client can perform a cheap workspace lookup."""
 
-        self._call_with_reconnect("WorkspaceNameLookup", self._request("Empty"))
+        self._rpc.call("WorkspaceNameLookup", self._rpc.request("Empty"))
 
     def whoami(self) -> Workspace:
         """Return the authenticated workspace summary."""
 
-        raw = self._call_with_reconnect("WorkspaceNameLookup", self._request("Empty"))
-        return normalize_workspace(raw, signing_keys=self._signing_keys)
+        raw = self._rpc.call("WorkspaceNameLookup", self._rpc.request("Empty"))
+        entity, warnings = self._workspace_normalizer.normalize(raw)
+        if entity is None:
+            reason = "; ".join(warnings) or "workspace normalization failed"
+            raise ModalAdapterError(
+                ErrorCode.UPSTREAM_ERROR,
+                f"failed to normalize workspace: {reason}",
+            )
+        return entity
 
     def list_workspaces(self) -> Sequence[Workspace]:
         """Return local/current workspace information."""
@@ -288,11 +301,14 @@ class ModalSdkAdapter:
     def list_environments(self) -> tuple[Sequence[Environment], list[str]]:
         """Return environments visible to the authenticated workspace."""
 
-        raw = self._call_with_reconnect("EnvironmentList", self._request("Empty"))
-        return self._normalize_safely(
-            lambda item: normalize_environment(item, signing_keys=self._signing_keys),
-            _items(raw, "items", "environments"),
-        )
+        raw = self._rpc.call("EnvironmentList", self._rpc.request("Empty"))
+        results, warnings = [], []
+        for item in _items(raw, "items", "environments"):
+            entity, w = self._environment_normalizer.normalize(item)
+            warnings.extend(w)
+            if entity is not None:
+                results.append(entity)
+        return results, warnings
 
     def get_environment(self, environment_name: str) -> Environment | None:
         """Return a single environment by name."""
@@ -309,12 +325,15 @@ class ModalSdkAdapter:
         """Return apps visible in an environment."""
 
         env = self._environment_name(environment_name)
-        request = self._request("AppListRequest", environment_name=env)
-        raw = self._call_with_reconnect("AppList", request)
-        return self._normalize_safely(
-            lambda item: normalize_app(item, signing_keys=self._signing_keys),
-            _items(raw, "apps", "items"),
-        )
+        request = self._rpc.request("AppListRequest", environment_name=env)
+        raw = self._rpc.call("AppList", request)
+        results, warnings = [], []
+        for item in _items(raw, "apps", "items"):
+            entity, w = self._app_normalizer.normalize(item)
+            warnings.extend(w)
+            if entity is not None:
+                results.append(entity)
+        return results, warnings
 
     def get_app(self, app_id: str, environment_name: str | None = None) -> App | None:
         """Return a single app by public ref, id, or name."""
@@ -328,10 +347,9 @@ class ModalSdkAdapter:
             if app.app_ref == app_id or app.name == app_id:
                 return app
             try:
-                app_native_id = decode_ref(
+                app_native_id = self._ref_codec.decode(
                     app.app_ref,
                     expected_env=self._environment_name(environment_name),
-                    signing_keys=self._signing_keys,
                 ).id
             except ValueError:
                 continue
@@ -350,12 +368,14 @@ class ModalSdkAdapter:
             app_id,
             expected_env=self._environment_name(environment_name),
         )
-        request = self._request("AppDeploymentHistoryRequest", app_id=native_id)
-        raw = self._call_with_reconnect("AppDeploymentHistory", request)
-        return [
-            normalize_deployment(item, signing_keys=self._signing_keys)
-            for item in _items(raw, "app_deployment_histories", "items")
-        ]
+        request = self._rpc.request("AppDeploymentHistoryRequest", app_id=native_id)
+        raw = self._rpc.call("AppDeploymentHistory", request)
+        results = []
+        for item in _items(raw, "app_deployment_histories", "items"):
+            entity, _ = self._deployment_normalizer.normalize(item)
+            if entity is not None:
+                results.append(entity)
+        return results
 
     def get_app_logs(
         self,
@@ -374,7 +394,7 @@ class ModalSdkAdapter:
         """Return a bounded log page for an app."""
 
         native_id = self._native_id(app_id) if app_id else None
-        request = self._request(
+        request = self._rpc.request(
             "AppFetchLogsRequest",
             app_id=native_id,
             since=since,
@@ -387,8 +407,12 @@ class ModalSdkAdapter:
             sandbox_id=sandbox_id,
             search_text=search_text,
         )
-        raw = self._call_with_reconnect("AppFetchLogs", request)
-        return normalize_log_batch(raw, signing_keys=self._signing_keys)
+        raw = self._rpc.call("AppFetchLogs", request)
+        entity, _ = self._log_normalizer.normalize(raw)
+        if entity is None:
+            msg = "log batch normalization failed unexpectedly"
+            raise ModalAdapterError(ErrorCode.UPSTREAM_ERROR, msg)
+        return entity
 
     async def tail_app_logs(
         self,
@@ -426,32 +450,34 @@ class ModalSdkAdapter:
 
         env = self._environment_name(environment_name)
         native_app_id = self._native_id(app_id, expected_env=env) if app_id else None
-        request = self._request(
+        request = self._rpc.request(
             "TaskListRequest",
             environment_name=env,
             app_id=native_app_id,
         )
-        raw = self._call_with_reconnect("TaskList", request)
-        return self._normalize_safely(
-            lambda item: normalize_container(item, signing_keys=self._signing_keys),
-            _items(raw, "tasks", "items"),
-        )
+        raw = self._rpc.call("TaskList", request)
+        results, warnings = [], []
+        for item in _items(raw, "tasks", "items"):
+            entity, w = self._container_normalizer.normalize(item)
+            warnings.extend(w)
+            if entity is not None:
+                results.append(entity)
+        return results, warnings
 
     def get_container(self, task_id: str) -> Container | None:
         """Return a single container by task id."""
 
         native_task_id = self._native_id(task_id)
-        request = self._request("TaskGetInfoRequest", task_id=native_task_id)
-        raw = self._call_with_reconnect("TaskGetInfo", request)
+        request = self._rpc.request("TaskGetInfoRequest", task_id=native_task_id)
+        raw = self._rpc.call("TaskGetInfo", request)
         items = _items(raw, "tasks", "items")
         target = items[0] if items else raw
         if not target:
             return None
-        return normalize_container(
-            target,
-            hint_task_id=native_task_id,
-            signing_keys=self._signing_keys,
+        entity, _ = self._container_normalizer.normalize(
+            target, hint_task_id=native_task_id
         )
+        return entity
 
     def get_container_logs(
         self,
@@ -488,12 +514,14 @@ class ModalSdkAdapter:
         """Return volumes visible in an environment."""
 
         env = self._environment_name(environment_name)
-        request = self._request("VolumeListRequest", environment_name=env)
-        raw = self._call_with_reconnect("VolumeList", request)
-        return [
-            normalize_volume(item, signing_keys=self._signing_keys)
-            for item in _items(raw, "items", "volumes")
-        ]
+        request = self._rpc.request("VolumeListRequest", environment_name=env)
+        raw = self._rpc.call("VolumeList", request)
+        results = []
+        for item in _items(raw, "items", "volumes"):
+            entity, _ = self._volume_normalizer.normalize(item)
+            if entity is not None:
+                results.append(entity)
+        return results
 
     def ls_volume(
         self,
@@ -505,14 +533,14 @@ class ModalSdkAdapter:
     ) -> Sequence[VolumeEntry]:
         """Return volume entries under a path."""
 
-        request = self._request(
+        request = self._rpc.request(
             "VolumeListFiles2Request",
             volume_id=self._native_id(volume_id),
             path=path,
             recursive=recursive,
             max_entries=max_entries,
         )
-        raw = self._call_with_reconnect("VolumeListFiles2", request)
+        raw = self._rpc.call("VolumeListFiles2", request)
         return [
             VolumeEntry.model_validate(item) for item in _items(raw, "entries", "items")
         ]
@@ -527,12 +555,12 @@ class ModalSdkAdapter:
     ) -> str:
         """Return a text file from a volume."""
 
-        request = self._request(
+        request = self._rpc.request(
             "VolumeGetFile2Request",
             volume_id=self._native_id(volume_id),
             path=path,
         )
-        raw = self._call_with_reconnect("VolumeGetFile2", request)
+        raw = self._rpc.call("VolumeGetFile2", request)
         data = getattr(
             raw,
             "data",
@@ -565,37 +593,40 @@ class ModalSdkAdapter:
         """Return sandboxes visible in an environment or app."""
 
         env = self._environment_name(environment_name)
-        request = self._request(
+        request = self._rpc.request(
             "SandboxListRequest",
             environment_name=env,
             app_id=self._native_id(app_id, expected_env=env) if app_id else None,
             tags=dict(tags or {}),
             include_finished=include_finished,
         )
-        raw = self._call_with_reconnect("SandboxList", request)
-        return [
-            normalize_sandbox(item, signing_keys=self._signing_keys)
-            for item in _items(raw, "sandboxes", "items")
-        ]
+        raw = self._rpc.call("SandboxList", request)
+        results = []
+        for item in _items(raw, "sandboxes", "items"):
+            entity, _ = self._sandbox_normalizer.normalize(item)
+            if entity is not None:
+                results.append(entity)
+        return results
 
     def get_sandbox(self, sandbox_id: str) -> SandboxSummary | None:
         """Return a single sandbox by id."""
 
-        request = self._request(
+        request = self._rpc.request(
             "SandboxWaitRequest",
             sandbox_id=self._native_id(sandbox_id),
         )
-        raw = self._call_with_reconnect("SandboxWait", request)
-        return normalize_sandbox(raw, signing_keys=self._signing_keys)
+        raw = self._rpc.call("SandboxWait", request)
+        entity, _ = self._sandbox_normalizer.normalize(raw)
+        return entity
 
     def get_sandbox_stdio(self, sandbox_id: str) -> tuple[str, str]:
         """Return buffered stdout/stderr text for a sandbox."""
 
-        request = self._request(
+        request = self._rpc.request(
             "SandboxGetLogsRequest",
             sandbox_id=self._native_id(sandbox_id),
         )
-        raw = self._call_with_reconnect("SandboxGetLogs", request)
+        raw = self._rpc.call("SandboxGetLogs", request)
         stdout = getattr(
             raw,
             "stdout",
@@ -609,4 +640,4 @@ class ModalSdkAdapter:
         return str(stdout), str(stderr)
 
 
-__all__ = ["ModalSdkAdapter"]
+__all__ = ["ModalRpcClient", "ModalSdkAdapter"]

@@ -19,14 +19,22 @@ from modal_mcp.toolsets._common import (
 
 
 def register_app_tools(mcp: FastMCP[Any]) -> None:
-    """Register app tools with read-only annotations."""
+    """Register app tools with read-only annotations.
+
+    All tools use custom registration so that modal_get_app retains its
+    environment_name parameter (the factory's get_fn only accepts a single ref).
+    modal_list_app_deployments takes app_ref as a required positional string,
+    not the standard optional ref pattern.
+    """
 
     @mcp.tool(
         name="modal_list_apps",
         tags={"apps"},
         annotations=READ_ONLY_ANNOTATIONS,
     )
-    def modal_list_apps(environment_name: str | None = None) -> ToolEnvelope[Page[App]]:
+    def modal_list_apps(
+        environment_name: str | None = None,
+    ) -> ToolEnvelope[Page[App]]:
         items, warnings = get_modal_adapter().list_apps(environment_name)
         return page_envelope_partial(items, warnings)
 

@@ -315,6 +315,56 @@ def decode_ref(
     )
 
 
+class RefCodec:
+    """Encode and decode signed ref tokens with keys bound at construction time.
+
+    Callers construct one instance per key-set and call ``encode``/``decode``
+    without ever seeing HMAC key material or CBOR details.
+
+    Parameters
+    ----------
+    keys:
+        One or more ``(kid, key_bytes)`` pairs.  The first pair is used for
+        signing new tokens; all pairs are tried when verifying incoming tokens
+        (key-rotation support).
+    """
+
+    def __init__(self, keys: tuple[tuple[str, bytes], ...]) -> None:
+        # validates non-empty; normalises to _SigningKey
+        self._keys = _coerce_signing_keys(keys)
+
+    def encode(self, payload: RefPayload) -> str:
+        """Encode and sign *payload* into a compact ``mref1.*.*`` token."""
+        return _encode_token(
+            payload,
+            prefix=REF_PREFIX,
+            type_tag="ref",
+            signing_keys=self._keys,
+        )
+
+    def decode(
+        self,
+        ref: str,
+        *,
+        expected_env: str | None = None,
+        now: int | None = None,
+    ) -> RefPayload:
+        """Decode and validate *ref*, optionally enforcing *expected_env* and *now*."""
+        return _decode_token(
+            ref,
+            prefix=REF_PREFIX,
+            type_tag="ref",
+            payload_type=RefPayload,
+            expected_env=expected_env,
+            signing_keys=self._keys,
+            now=now,
+        )
+
+    def signing_key_pairs(self) -> tuple[tuple[str, bytes], ...]:
+        """Return raw (kid, key_bytes) pairs for callers that predate RefCodec."""
+        return tuple((k.kid, k.key) for k in self._keys)
+
+
 def encode_cursor(
     payload: CursorPayload,
     *,
@@ -393,6 +443,7 @@ __all__ = [
     "TOKEN_VERSION",
     "ApprovalPayload",
     "CursorPayload",
+    "RefCodec",
     "RefPayload",
     "canonical_cbor_deterministic",
     "decode_approval",

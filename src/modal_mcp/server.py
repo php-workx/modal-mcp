@@ -54,7 +54,6 @@ ALL_TOOLSETS = frozenset(
         "logs",
         "volumes",
         "sandboxes",
-        "change",
         "expert",
     }
 )
@@ -394,6 +393,7 @@ def create_mcp(
     mcp.add_middleware(OtelMiddleware(resolved_settings))
     mcp.add_middleware(
         PolicyMiddleware(
+            mcp,
             resolved_settings,
             approval_ledger=approval_ledger,
             audit_sink=resolved_audit_sink,
@@ -405,7 +405,7 @@ def create_mcp(
     if disabled_toolsets:
         mcp.disable(tags=set(disabled_toolsets))
     if resolved_settings.modal_mcp_read_only:
-        mcp.disable(tags={"change", "expert"})
+        mcp.disable(tags={"expert"})
     return mcp
 
 
