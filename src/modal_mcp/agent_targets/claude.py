@@ -108,13 +108,19 @@ path.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import sys
+import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final
+from typing import Any, Final, TextIO, cast
 
 from modal_mcp.agent_targets.contract import AgentTargetContract
+
+#: Internal alias used by the install body.
+JsonTable = dict[str, Any]
 
 # ---------------------------------------------------------------------------
 # Public re-export so callers can import AgentTargetContract from claude.py
@@ -136,11 +142,14 @@ __all__ = [
     "CLAUDE_TOP_LEVEL_KEY",
     "CLAUDE_TRANSPORT",
     "AgentTargetContract",
+    "ClaudeInstallError",
     "build_contract",
     "format_config_snippet",
     "format_startup_command",
     "get_claude_config_dir",
     "get_claude_config_path",
+    "install",
+    "render",
 ]
 
 # ---------------------------------------------------------------------------
@@ -431,3 +440,357 @@ def build_contract(bind: str = CLAUDE_DEFAULT_BIND) -> AgentTargetContract:
 #:     listening on.  Install code must always call
 #:     ``build_contract(bind=settings.bind)`` and use the returned instance.
 CLAUDE_CONTRACT: Final[AgentTargetContract] = build_contract()
+
+
+# ---------------------------------------------------------------------------
+# Install + render (absorbed from agent_config.py)
+# ---------------------------------------------------------------------------
+
+
+class ClaudeInstallError(Exception):
+    """Raised when a Claude Desktop config install fails a safety check.
+
+    Possible causes include (but are not limited to):
+    - Unsupported platform: cannot determine the config path.
+    - Config directory does not exist (Claude Desktop not installed).
+    - Config file is a symlink (refused to follow).
+    - Config file is not a regular file (directory, device, FIFO …).
+    - Config file cannot be parsed as valid JSON.
+    - Top-level config value is not a JSON object.
+    - ``mcpServers`` value is present but is not a JSON object.
+    - ``mcpServers.modal-mcp`` already exists with an incompatible entry.
+    - Post-write validation failed (backup restored automatically).
+    """
+
+
+def _make_timestamp() -> str:
+    """Return a compact UTC datetime string suitable for backup filenames."""
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    """Atomically write text *content* to *path* via a sibling temp file."""
+    encoded = content.encode()
+    tmp_path: Path | None = None
+    try:
+        fd, tmp_str = tempfile.mkstemp(dir=str(path.parent), prefix=".tmp_claude_")
+        tmp_path = Path(tmp_str)
+        try:
+            os.write(fd, encoded)
+        finally:
+            os.close(fd)
+        tmp_path.replace(path)
+        tmp_path = None
+    finally:
+        if tmp_path is not None:
+            with contextlib.suppress(OSError):
+                tmp_path.unlink()
+
+
+def render(
+    *,
+    env_file: str | Path | None = None,
+    bind: str = CLAUDE_DEFAULT_BIND,
+    file: TextIO | None = None,
+) -> str:
+    """Render the Claude Desktop JSON config snippet (with startup hint).
+
+    When *file* is not None, prints the startup-command hint and snippet to
+    *file* (matching the previous ``_print_claude_config`` behaviour).
+    Always returns the snippet body.
+
+    Args:
+        env_file: Optional absolute path to the ``.env`` file used only for
+            the startup-command hint.  Relative paths raise :class:`ValueError`.
+        bind: The ``host:port`` the server listens on; embedded in the SSE URL.
+            Defaults to :data:`CLAUDE_DEFAULT_BIND`.
+        file: Optional file-like object to print to.
+
+    Returns:
+        The rendered JSON snippet.
+
+    Raises:
+        ValueError: If *env_file* is a non-absolute path.
+    """
+    if env_file is not None:
+        startup_tokens = format_startup_command(env_file)
+        startup_cmd = " ".join(startup_tokens)
+    else:
+        startup_cmd = f"modal-mcp run --env-file {_ENV_FILE_PLACEHOLDER}"
+
+    snippet = format_config_snippet(bind=bind)
+    if file is not None:
+        print(
+            "# Transport: HTTP/SSE (Claude Desktop connects to a running"
+            " modal-mcp server)",
+            file=file,
+        )
+        print("# 1. Start the server with an absolute --env-file path:", file=file)
+        print(f"#    {startup_cmd}", file=file)
+        print("# 2. Add this block to claude_desktop_config.json", file=file)
+        print(snippet, end="", file=file)
+    return snippet
+
+
+def install(
+    *,
+    bind: str | None = None,
+    dry_run: bool = False,
+    yes: bool = False,
+    config_path: Path | None = None,
+    file: TextIO | None = None,
+    _timestamp: str | None = None,
+) -> str:
+    """Install the ``mcpServers.modal-mcp`` entry into Claude Desktop config.
+
+    Supports dry-run previews, interactive confirmation, atomic backup,
+    idempotent re-runs, and post-write validation.
+
+    Args:
+        bind: Optional ``host:port`` override for the SSE URL embedded in the
+            config entry.  Defaults to :data:`CLAUDE_DEFAULT_BIND`.
+        dry_run: When ``True``, preview the change and return ``"dry_run"``.
+        yes: When ``True``, skip the interactive confirmation prompt.
+        config_path: Override the default install target (platform-specific
+            ``claude_desktop_config.json``).
+        file: Output stream for status messages.  Defaults to ``sys.stdout``.
+        _timestamp: Override the timestamp embedded in the backup suffix.
+
+    Returns:
+        ``"installed"``, ``"already_installed"``, ``"declined"``, or
+        ``"dry_run"``.
+
+    Raises:
+        ClaudeInstallError: If a safety check fails.
+    """
+    out = sys.stdout if file is None else file
+
+    contract = build_contract(bind=bind) if bind is not None else build_contract()
+    sse_url = contract.server_url  # always non-None for SSE transport
+
+    new_entry: JsonTable = {"type": CLAUDE_TRANSPORT, "url": sse_url}
+    snippet = (
+        json.dumps({CLAUDE_TOP_LEVEL_KEY: {CLAUDE_SERVER_NAME: new_entry}}, indent=2)
+        + "\n"
+    )
+
+    if config_path is None:
+        runtime_path = get_claude_config_path()
+        if runtime_path is None:
+            raise ClaudeInstallError(
+                "Unsupported platform: cannot determine the Claude Desktop"
+                " config path. Pass config_path explicitly to override."
+            )
+        resolved_config = runtime_path.expanduser().absolute()
+    else:
+        resolved_config = Path(config_path).absolute()
+
+    # ------------------------------------------------------------------
+    # 2.  Dry-run
+    # ------------------------------------------------------------------
+
+    if dry_run:
+        print(f"Target: {resolved_config}", file=out)
+        print(f"Change: {contract.dry_run_description}", file=out)
+        print(file=out)
+        print("Would add to config:", file=out)
+        print(snippet, end="", file=out)
+        return "dry_run"
+
+    # ------------------------------------------------------------------
+    # 3.  Safety checks
+    # ------------------------------------------------------------------
+
+    if not resolved_config.parent.exists():
+        raise ClaudeInstallError(
+            f"Config directory {resolved_config.parent} does not exist. "
+            "Is Claude Desktop installed and has it been launched at least once?"
+        )
+
+    if resolved_config.is_symlink():
+        raise ClaudeInstallError(
+            f"Config file {resolved_config} is a symlink. "
+            "Refusing to write through a symlink."
+        )
+
+    if resolved_config.exists() and not resolved_config.is_file():
+        raise ClaudeInstallError(
+            f"Config path {resolved_config} exists but is not a regular file. "
+            "Refusing to write."
+        )
+
+    # ------------------------------------------------------------------
+    # 4.  Read and parse existing JSON
+    # ------------------------------------------------------------------
+
+    existing_content: str = ""
+    existing_data: JsonTable = {}
+
+    if resolved_config.exists():
+        try:
+            existing_content = resolved_config.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ClaudeInstallError(
+                f"Cannot read config file {resolved_config}: {exc}"
+            ) from exc
+
+        try:
+            existing_data = json.loads(existing_content)
+        except json.JSONDecodeError as exc:
+            raise ClaudeInstallError(
+                f"Config file {resolved_config} cannot be parsed as valid JSON: {exc}"
+            ) from exc
+
+        if not isinstance(existing_data, dict):
+            raise ClaudeInstallError(
+                f"Config file {resolved_config}: top-level value is not a JSON object."
+            )
+
+        if CLAUDE_TOP_LEVEL_KEY in existing_data and not isinstance(
+            existing_data[CLAUDE_TOP_LEVEL_KEY], dict
+        ):
+            raise ClaudeInstallError(
+                f"Config file {resolved_config}: "
+                f"'{CLAUDE_TOP_LEVEL_KEY}' is present but is not a JSON object."
+            )
+
+    # ------------------------------------------------------------------
+    # 5.  Idempotency / conflict check
+    # ------------------------------------------------------------------
+
+    mcp_servers_value = existing_data.get(CLAUDE_TOP_LEVEL_KEY, {})
+    if not isinstance(mcp_servers_value, dict):
+        raise ClaudeInstallError(
+            f"Config file {resolved_config}: "
+            f"'{CLAUDE_TOP_LEVEL_KEY}' is present but is not a JSON object."
+        )
+    mcp_servers = cast(JsonTable, mcp_servers_value)
+
+    if CLAUDE_SERVER_NAME in mcp_servers:
+        existing_entry_value = mcp_servers[CLAUDE_SERVER_NAME]
+        if not isinstance(existing_entry_value, dict):
+            raise ClaudeInstallError(
+                f"Config file {resolved_config}: {contract.idempotency_key} "
+                "is present but is not a JSON object."
+            )
+        existing_entry = cast(JsonTable, existing_entry_value)
+        if (
+            existing_entry.get("type") == CLAUDE_TRANSPORT
+            and existing_entry.get("url") == sse_url
+        ):
+            print(
+                f"Already installed: {contract.idempotency_key} in {resolved_config}",
+                file=out,
+            )
+            return "already_installed"
+        raise ClaudeInstallError(
+            f"Config file {resolved_config}: {contract.idempotency_key} "
+            "already exists with an incompatible transport or url. "
+            "Remove the existing entry and rerun."
+        )
+
+    # ------------------------------------------------------------------
+    # 6.  Confirmation prompt
+    # ------------------------------------------------------------------
+
+    if not yes:
+        print(f"Target: {resolved_config}", file=out)
+        print("Would add:", file=out)
+        print(snippet, end="", file=out)
+        print(file=out)
+        try:
+            response = input("Proceed? [y/N] ").strip().lower()
+        except EOFError:
+            response = ""
+        if response not in ("y", "yes"):
+            print("Cancelled.", file=out)
+            return "declined"
+
+    # ------------------------------------------------------------------
+    # 7.  Backup existing file
+    # ------------------------------------------------------------------
+
+    backup_path: Path | None = None
+    if resolved_config.exists():
+        timestamp = _timestamp if _timestamp is not None else _make_timestamp()
+        backup_suffix = CLAUDE_BACKUP_SUFFIX_TEMPLATE.format(timestamp=timestamp)
+        backup_path = resolved_config.parent / (resolved_config.name + backup_suffix)
+        try:
+            _atomic_write_text(backup_path, existing_content)
+        except OSError as exc:
+            raise ClaudeInstallError(
+                f"Failed to create backup {backup_path}: {exc}"
+            ) from exc
+
+    # ------------------------------------------------------------------
+    # 8.  Merge new entry and write atomically
+    # ------------------------------------------------------------------
+
+    new_data: JsonTable = {**existing_data}
+    if CLAUDE_TOP_LEVEL_KEY not in new_data:
+        new_data[CLAUDE_TOP_LEVEL_KEY] = {}
+    new_data[CLAUDE_TOP_LEVEL_KEY][CLAUDE_SERVER_NAME] = new_entry
+    new_content = json.dumps(new_data, indent=2) + "\n"
+
+    try:
+        _atomic_write_text(resolved_config, new_content)
+    except OSError as exc:
+        raise ClaudeInstallError(
+            f"Failed to write config file {resolved_config}: {exc}"
+        ) from exc
+
+    # ------------------------------------------------------------------
+    # 9.  Post-write validation (restore backup on failure)
+    # ------------------------------------------------------------------
+
+    validation_error: Exception | None = None
+    try:
+        validated = json.loads(resolved_config.read_text(encoding="utf-8"))
+        server_entry = validated.get(CLAUDE_TOP_LEVEL_KEY, {}).get(CLAUDE_SERVER_NAME)
+        if server_entry is None:
+            raise ValueError(
+                f"Post-write validation: {contract.idempotency_key} not found"
+            )
+        if server_entry.get("type") != CLAUDE_TRANSPORT:
+            raise ValueError(
+                f"Post-write validation: type mismatch "
+                f"(expected {CLAUDE_TRANSPORT!r}, got {server_entry.get('type')!r})"
+            )
+        if server_entry.get("url") != sse_url:
+            raise ValueError(
+                f"Post-write validation: url mismatch "
+                f"(expected {sse_url!r}, got {server_entry.get('url')!r})"
+            )
+    except Exception as exc:  # noqa: BLE001 — validation must catch anything
+        validation_error = exc
+
+    if validation_error is not None:
+        restore_msg = ""
+        if backup_path is not None and backup_path.exists():
+            try:
+                _atomic_write_text(
+                    resolved_config, backup_path.read_text(encoding="utf-8")
+                )
+                restore_msg = f" Config restored from backup {backup_path}."
+            except OSError:
+                restore_msg = (
+                    f" Backup restore failed"
+                    f" — please restore manually from {backup_path}."
+                )
+        else:
+            with contextlib.suppress(OSError):
+                resolved_config.unlink(missing_ok=True)
+            restore_msg = " Freshly-written config removed (no prior file to restore)."
+        raise ClaudeInstallError(
+            f"Post-write validation failed: {validation_error}.{restore_msg}"
+        ) from validation_error
+
+    # ------------------------------------------------------------------
+    # 10.  Success
+    # ------------------------------------------------------------------
+
+    print(
+        f"Installed: {contract.idempotency_key} → {resolved_config}",
+        file=out,
+    )
+    return "installed"

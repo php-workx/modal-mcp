@@ -1582,7 +1582,7 @@ def test_install_claude_validation_failure_removes_file_when_no_backup(
     # Inject a validation error by making _json.loads raise on every call.
     with (
         _patch(
-            "modal_mcp.agent_config._json.loads",
+            "modal_mcp.agent_targets.claude.json.loads",
             side_effect=_json_module.JSONDecodeError("injected", "", 0),
         ),
         pytest.raises(ClaudeInstallError, match=r"[Vv]alidation"),
@@ -1611,7 +1611,7 @@ def test_install_claude_validation_failure_with_backup_restores_original(
 
     with (
         _patch(
-            "modal_mcp.agent_config._json.loads",
+            "modal_mcp.agent_targets.claude.json.loads",
             side_effect=_json_module.JSONDecodeError("injected", "", 0),
         ),
         pytest.raises(ClaudeInstallError, match=r"[Vv]alidation"),
