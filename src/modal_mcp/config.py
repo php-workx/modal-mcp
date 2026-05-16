@@ -117,6 +117,10 @@ class Settings(BaseSettings):
         default=None,
         validation_alias="MODAL_ENVIRONMENT",
     )
+    modal_profile: str | None = Field(
+        default=None,
+        validation_alias="MODAL_PROFILE",
+    )
 
     modal_mcp_http_bind: str = Field(
         default="127.0.0.1:8765",
