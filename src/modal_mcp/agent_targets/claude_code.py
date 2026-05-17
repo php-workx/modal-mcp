@@ -37,7 +37,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import IO, Final, Literal
+from typing import IO, Final, Literal, TextIO
 
 from modal_mcp.agent_targets.contract import AgentTargetContract
 
@@ -91,9 +91,10 @@ CONTRACT = AgentTargetContract(
         "env_file is not an absolute path",
         "subprocess call to claude mcp add-json exits non-zero",
     ),
-    parse_validation_strategy="run 'claude mcp get modal-mcp' and check exit code 0",
+    parse_validation_strategy=("run 'claude mcp get modal-mcp' and check exit code 0"),
     dry_run_description=(
-        "add mcpServers.modal-mcp entry via 'claude mcp add-json' (stdio transport, --scope user)"
+        "add mcpServers.modal-mcp entry via 'claude mcp add-json'"
+        " (stdio transport, --scope user)"
     ),
     idempotency_key="mcpServers.modal-mcp",
 )
@@ -106,7 +107,7 @@ CONTRACT = AgentTargetContract(
 def render(
     *,
     env_file: str,
-    scope: str = CLAUDE_CODE_DEFAULT_SCOPE,
+    scope: Scope = CLAUDE_CODE_DEFAULT_SCOPE,
     file: IO[str] | None = None,
 ) -> None:
     """Print the ``claude mcp add-json`` command that registers modal-mcp.
@@ -125,10 +126,14 @@ def render(
         raise ValueError(f"env_file must be an absolute path; got: {env_file}")
 
     env_path_str = str(env_path)
+    args_list = [
+        arg.format(env_file=env_path_str) if "{env_file}" in arg else arg
+        for arg in CLAUDE_CODE_SERVER_ARGS_TEMPLATE
+    ]
     json_entry = {
         "type": CLAUDE_CODE_TRANSPORT,
         "command": CLAUDE_CODE_SERVER_COMMAND,
-        "args": ["stdio", "--env-file", env_path_str],
+        "args": args_list,
     }
     json_str = json.dumps(json_entry, separators=(",", ":"))
     command = (
@@ -136,7 +141,10 @@ def render(
     )
 
     out = file if file is not None else sys.stdout
-    print("# Run this command to register modal-mcp with Claude Code:", file=out)
+    print(
+        "# Run this command to register modal-mcp with Claude Code:",
+        file=out,
+    )
     print(command, file=out)
 
 
@@ -150,8 +158,9 @@ def install(
     env_file: str,
     dry_run: bool = False,
     yes: bool = False,
-    scope: str = CLAUDE_CODE_DEFAULT_SCOPE,
+    scope: Scope = CLAUDE_CODE_DEFAULT_SCOPE,
     _claude_json_path: Path | None = None,
+    file: TextIO | None = None,
 ) -> str:
     """Install modal-mcp into Claude Code via ``claude mcp add-json``.
 
@@ -162,6 +171,7 @@ def install(
         yes: If ``True``, skip the interactive confirmation prompt.
         scope: Claude Code scope — ``"user"``, ``"project"``, or ``"local"``.
         _claude_json_path: Override the path to ``~/.claude.json`` for testing.
+        file: Output stream for status messages.  Defaults to ``sys.stdout``.
 
     Returns:
         One of ``"installed"``, ``"already_installed"``, ``"dry_run"``,
@@ -172,6 +182,8 @@ def install(
         ClaudeCodeInstallError: If ``claude`` is not on PATH or the subprocess
             exits non-zero.
     """
+    out = sys.stdout if file is None else file
+
     # 1. Validate env_file is absolute.
     env_path = Path(env_file)
     if not env_path.is_absolute():
@@ -185,20 +197,30 @@ def install(
         )
 
     # 3. Resolve claude.json path.
-    claude_json_path = (
-        _claude_json_path
-        if _claude_json_path is not None
-        else Path("~/.claude.json").expanduser()
-    )
+    # Only check idempotency via file read for user scope (or test override).
+    # For project/local scope we cannot reliably locate the right config file.
+    claude_json_path: Path | None
+    if _claude_json_path is not None:
+        claude_json_path = _claude_json_path
+    elif scope == "user":
+        claude_json_path = Path("~/.claude.json").expanduser()
+    else:
+        claude_json_path = None
 
-    # 4. Read existing entry for idempotency.
+    # 4. Build args list from template.
+    args_list = [
+        arg.format(env_file=env_path_str) if "{env_file}" in arg else arg
+        for arg in CLAUDE_CODE_SERVER_ARGS_TEMPLATE
+    ]
+
+    # 5. Read existing entry for idempotency (user scope / test override only).
     needs_remove = False
     expected_entry = {
         "command": CLAUDE_CODE_SERVER_COMMAND,
-        "args": ["stdio", "--env-file", env_path_str],
+        "args": args_list,
     }
 
-    if claude_json_path.exists():
+    if claude_json_path is not None and claude_json_path.exists():
         try:
             data = json.loads(claude_json_path.read_text(encoding="utf-8"))
             mcp_servers = data.get(CLAUDE_CODE_TOP_LEVEL_KEY, {})
@@ -212,46 +234,61 @@ def install(
             else:
                 needs_remove = True
 
-    # 5. Build json_entry for subprocess call.
+    # 6. Build json_entry for subprocess call.
     json_entry = {
         "type": CLAUDE_CODE_TRANSPORT,
         "command": CLAUDE_CODE_SERVER_COMMAND,
-        "args": ["stdio", "--env-file", env_path_str],
+        "args": args_list,
     }
 
-    # 6. Dry run.
+    # 7. Dry run.
     if dry_run:
         json_str = json.dumps(json_entry, separators=(",", ":"))
         command = (
-            f"claude mcp add-json {CLAUDE_CODE_SERVER_NAME} '{json_str}' --scope {scope}"
+            f"claude mcp add-json {CLAUDE_CODE_SERVER_NAME}"
+            f" '{json_str}' --scope {scope}"
         )
-        print(f"Target: {claude_json_path}")
-        print(f"Change: {CONTRACT.dry_run_description}")
-        print()
-        print("Would run:")
-        print(command)
+        display_path = (
+            claude_json_path if claude_json_path is not None else "~/.claude.json"
+        )
+        print(f"Target: {display_path}", file=out)
+        print(f"Change: {CONTRACT.dry_run_description}", file=out)
+        print(file=out)
+        print("Would run:", file=out)
+        print(command, file=out)
         return "dry_run"
 
-    # 7. Prompt if not yes.
+    # 8. Prompt if not yes.
     if not yes:
-        answer = input("Install modal-mcp entry? [y/N] ").strip().lower()
+        try:
+            answer = input("Install modal-mcp entry? [y/N] ").strip().lower()
+        except EOFError:
+            answer = ""
         if answer not in ("y", "yes"):
             return "declined"
 
-    # 8. Remove existing entry if needed.
+    # 9. Remove existing entry if needed.
     if needs_remove:
         try:
             subprocess.run(
-                ["claude", "mcp", "remove", CLAUDE_CODE_SERVER_NAME, "--scope", scope],
+                [
+                    "claude",
+                    "mcp",
+                    "remove",
+                    CLAUDE_CODE_SERVER_NAME,
+                    "--scope",
+                    scope,
+                ],
                 check=True,
                 capture_output=True,
+                text=True,
             )
         except subprocess.CalledProcessError as exc:
             raise ClaudeCodeInstallError(
                 f"claude mcp remove failed: {exc.stderr}"
             ) from exc
 
-    # 9. Add the new entry.
+    # 10. Add the new entry.
     try:
         subprocess.run(
             [
@@ -265,13 +302,19 @@ def install(
             ],
             check=True,
             capture_output=True,
+            text=True,
         )
     except subprocess.CalledProcessError as exc:
         raise ClaudeCodeInstallError(
             f"claude mcp add-json failed: {exc.stderr}"
         ) from exc
 
-    # 10. Return "installed".
+    # 11. Return "installed".
+    print(
+        f"Installed: {CONTRACT.idempotency_key} registered with"
+        f" Claude Code (scope={scope})",
+        file=out,
+    )
     return "installed"
 
 
