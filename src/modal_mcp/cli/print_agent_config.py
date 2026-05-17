@@ -23,9 +23,9 @@ class PrintAgentConfigCommand:
         )
         parser.add_argument(
             "--target",
-            choices=["claude", "claude_desktop", "codex"],
+            choices=["claude", "claude_desktop", "codex", "claude_code", "claude-code"],
             default="claude",
-            help="Agent target to print config for (default: claude).",
+            help="Agent target to print config for (default: claude). Use claude_code or claude-code for Claude Code.",
         )
         parser.add_argument(
             "--env-file",
