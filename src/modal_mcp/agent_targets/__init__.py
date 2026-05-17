@@ -13,7 +13,7 @@ import importlib.util
 from types import ModuleType
 from typing import Final
 
-from modal_mcp.agent_targets import claude, codex
+from modal_mcp.agent_targets import claude, claude_code, codex
 from modal_mcp.agent_targets.contract import AgentTargetContract
 
 #: Name → module map.  Each module MUST expose ``install`` and ``render``
@@ -22,6 +22,8 @@ _TARGETS: Final[dict[str, ModuleType]] = {
     "codex": codex,
     "claude": claude,
     "claude_desktop": claude,  # alias
+    "claude_code": claude_code,
+    "claude-code": claude_code,  # alias
 }
 
 # Register optional targets only when present.  Use ``find_spec`` to detect
