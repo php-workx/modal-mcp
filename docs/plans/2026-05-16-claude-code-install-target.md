@@ -190,6 +190,7 @@ class TestClaudeCodeInstall:
 
     def test_install_is_idempotent_when_entry_matches(self, tmp_path: Path) -> None:
         entry = {
+            "type": "stdio",
             "command": "modal-mcp",
             "args": ["stdio", "--env-file", "/abs/.env"],
         }
@@ -276,7 +277,7 @@ class TestClaudeCodeInstallFromCli:
 - [ ] Run RED: `uv run pytest tests/unit/test_agent_targets_claude_code.py -v` — expect all FAIL (`ModuleNotFoundError`).
 
 - [ ] Commit RED:
-  ```
+  ```bash
   git commit -m "test(claude-code): add failing contract + subprocess-delegation tests"
   ```
 
@@ -353,7 +354,7 @@ claude mcp add-json modal-mcp '{"type":"stdio","command":"modal-mcp","args":["st
   ```
 
 - [ ] Commit GREEN:
-  ```
+  ```bash
   git commit -m "feat(claude-code): add subprocess-delegation adapter for claude mcp add-json"
   ```
 
@@ -415,7 +416,7 @@ choices=["claude", "claude_desktop", "codex", "claude_code", "claude-code"]
   Expected: `claude mcp add-json modal-mcp '...' --scope user`
 
 - [ ] Commit:
-  ```
+  ```bash
   git commit -m "feat(agent-targets): register claude_code + claude-code alias; add --scope flag"
   ```
 
@@ -465,7 +466,7 @@ writing is delegated to the CLI.
 - [ ] `mkdir -p docs/adr && <write file>`
 
 - [ ] Commit:
-  ```
+  ```bash
   git commit -m "docs(adr): record claude-code adapter delegates to claude CLI"
   ```
 
@@ -480,7 +481,7 @@ writing is delegated to the CLI.
    (project scope).
 
 2. **Add automated install opener**:
-   ```
+   ```text
    Recommended: `modal-mcp setup --install claude-code` registers the server
    automatically via `claude mcp add-json`. The manual steps below are for
    operators who prefer direct control.
@@ -514,7 +515,7 @@ Update Claude Code row in install table:
 - [ ] Edit `README.md`.
 
 - [ ] Commit:
-  ```
+  ```bash
   git commit -m "docs(clients): claude-code uses stdio transport + automated install via claude CLI"
   ```
 
@@ -539,7 +540,7 @@ Update Claude Code row in install table:
   Expected: `claude mcp add-json modal-mcp '{"type":"stdio",...}' --scope user`
 
 - [ ] Commit if cleanup needed:
-  ```
+  ```bash
   git commit -m "chore(claude-code): lint and format cleanup"
   ```
 
