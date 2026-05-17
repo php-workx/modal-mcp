@@ -318,23 +318,24 @@ CONTRACT = AgentTargetContract(
 ### `render(env_file, scope="user", file=None)`
 
 Validates `env_file` is absolute. Builds and prints (to `file` or stdout):
-```
+
+```text
 # Run this command to register modal-mcp with Claude Code:
 claude mcp add-json modal-mcp '{"type":"stdio","command":"modal-mcp","args":["stdio","--env-file","/abs/path/.env"]}' --scope user
 ```
 
 ### `install(env_file, dry_run, yes, scope="user", *, _claude_json_path=None)`
 
-```
+```text
 1. Validate env_file is absolute. Raise ValueError if not.
-2. Check shutil.which("claude"). Raise ClaudeCodeInstallError if None.
-3. Resolve _claude_json_path (for tests) or Path("~/.claude.json").expanduser().
-4. If claude_json exists, read + parse it for idempotency check:
-   - If mcpServers.modal-mcp exists AND matches expected entry → return "already_installed".
+2. Resolve _claude_json_path (for tests) or Path("~/.claude.json").expanduser().
+3. If claude_json exists, read + parse it for idempotency check:
+   - If mcpServers.modal-mcp exists AND matches expected entry (incl. type) → return "already_installed".
    - If mcpServers.modal-mcp exists AND differs → set needs_remove=True.
-5. If dry_run:
+4. If dry_run:
    - Print target path, planned change, and the claude mcp add-json command.
    - Return "dry_run".
+5. Check shutil.which("claude"). Raise ClaudeCodeInstallError if None (deferred so dry_run never requires it).
 6. If not yes: prompt confirmation (like codex.py pattern). If declined → return "declined".
 7. If needs_remove:
    - subprocess.run(["claude", "mcp", "remove", "modal-mcp", "--scope", scope], check=True)
@@ -503,7 +504,8 @@ writing is delegated to the CLI.
 ### `README.md`
 
 Update Claude Code row in install table:
-```
+
+```md
 | Claude Code install | `modal-mcp setup --install claude-code` |
 ```
 

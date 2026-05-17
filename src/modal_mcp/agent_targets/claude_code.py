@@ -190,13 +190,7 @@ def install(
         raise ValueError(f"env_file must be an absolute path; got: {env_file}")
     env_path_str = str(env_path)
 
-    # 2. Check claude CLI is available.
-    if shutil.which("claude") is None:
-        raise ClaudeCodeInstallError(
-            "claude CLI not found on PATH. Install from https://claude.ai/download"
-        )
-
-    # 3. Resolve claude.json path.
+    # 2. Resolve claude.json path.
     # Only check idempotency via file read for user scope (or test override).
     # For project/local scope we cannot reliably locate the right config file.
     claude_json_path: Path | None
@@ -216,6 +210,7 @@ def install(
     # 5. Read existing entry for idempotency (user scope / test override only).
     needs_remove = False
     expected_entry = {
+        "type": CLAUDE_CODE_TRANSPORT,
         "command": CLAUDE_CODE_SERVER_COMMAND,
         "args": args_list,
     }
@@ -258,7 +253,13 @@ def install(
         print(command, file=out)
         return "dry_run"
 
-    # 8. Prompt if not yes.
+    # 8. Check claude CLI is available (deferred so dry_run never requires it).
+    if shutil.which("claude") is None:
+        raise ClaudeCodeInstallError(
+            "claude CLI not found on PATH. Install from https://claude.ai/download"
+        )
+
+    # 9. Prompt if not yes.
     if not yes:
         try:
             answer = input("Install modal-mcp entry? [y/N] ").strip().lower()

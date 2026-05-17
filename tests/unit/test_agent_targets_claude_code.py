@@ -106,7 +106,10 @@ class TestClaudeCodeInstall:
         claude_json = tmp_path / ".claude.json"
         claude_json.write_text("{}", encoding="utf-8")
 
-        with patch("subprocess.run") as mock_run:
+        with (
+            patch("shutil.which", return_value="/usr/bin/claude"),
+            patch("subprocess.run") as mock_run,
+        ):
             mock_run.return_value = self._make_completed(0)
             result = claude_code.install(
                 env_file="/abs/.env",
@@ -140,6 +143,7 @@ class TestClaudeCodeInstall:
 
     def test_install_is_idempotent_when_entry_matches(self, tmp_path: Path) -> None:
         entry = {
+            "type": "stdio",
             "command": "modal-mcp",
             "args": ["stdio", "--env-file", "/abs/.env"],
         }
@@ -167,7 +171,10 @@ class TestClaudeCodeInstall:
             json.dumps({"mcpServers": {"modal-mcp": old_entry}}), encoding="utf-8"
         )
 
-        with patch("subprocess.run") as mock_run:
+        with (
+            patch("shutil.which", return_value="/usr/bin/claude"),
+            patch("subprocess.run") as mock_run,
+        ):
             mock_run.return_value = self._make_completed(0)
             result = claude_code.install(
                 env_file="/abs/.env",
