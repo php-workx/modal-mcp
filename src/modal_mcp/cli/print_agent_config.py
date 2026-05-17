@@ -21,11 +21,18 @@ class PrintAgentConfigCommand:
             cls.name,
             help="Print the agent client configuration block.",
         )
+        from modal_mcp.agent_targets import TARGETS
+
+        target_names = sorted(name for name, _ in TARGETS)
         parser.add_argument(
             "--target",
-            choices=["claude", "claude_desktop", "codex"],
+            choices=target_names,
             default="claude",
-            help="Agent target to print config for (default: claude).",
+            metavar="TARGET",
+            help=(
+                "Agent target to print config for (default: claude). "
+                f"Supported: {', '.join(target_names)}."
+            ),
         )
         parser.add_argument(
             "--env-file",

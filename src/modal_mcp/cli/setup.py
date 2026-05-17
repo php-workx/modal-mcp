@@ -57,6 +57,18 @@ class SetupCommand:
             ),
         )
         parser.add_argument(
+            "--scope",
+            choices=["user", "project", "local"],
+            default="user",
+            help=(
+                "MCP server scope for --install claude-code. "
+                "user: all projects (default). "
+                "project: current project via .mcp.json. "
+                "local: current project, private (stored in ~/.claude.json). "
+                "Ignored by other install targets."
+            ),
+        )
+        parser.add_argument(
             "--env-file",
             metavar="PATH",
             default=None,

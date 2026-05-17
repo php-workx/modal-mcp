@@ -2,7 +2,7 @@
 
 Modal MCP can be connected to any MCP client that can launch a stdio server or
 connect to a local HTTP/SSE endpoint. The built-in installer currently supports
-Codex CLI and Claude Desktop. Claude Code is configured manually.
+Codex CLI, Claude Desktop, and Claude Code.
 
 Run setup first:
 
@@ -27,15 +27,32 @@ uv run modal-mcp doctor --env-file .env
 Claude Code (the `claude` CLI) launches `modal-mcp` as a stdio subprocess.
 This is the recommended client for day-to-day use.
 
-Add the following to your Claude Code settings file
-(`~/.claude/settings.json`):
+**Automated install (recommended):**
+
+```bash
+modal-mcp setup --install claude-code --env-file /absolute/path/to/project/.env
+```
+
+This runs `claude mcp add-json` to register the server at user scope
+(`~/.claude.json`). Use `--scope project` to write `.mcp.json` instead,
+or `--dry-run` to preview without writing.
+
+**Manual install (fallback):** run the following command directly:
+
+```bash
+claude mcp add-json modal-mcp \
+  '{"type":"stdio","command":"modal-mcp","args":["stdio","--env-file","/absolute/path/to/project/.env"]}' \
+  --scope user
+```
+
+If you prefer to hand-edit the config, the user-scope MCP store is `~/.claude.json`:
 
 ```json
 {
   "mcpServers": {
     "modal-mcp": {
       "command": "modal-mcp",
-      "args": ["run", "--env-file", "/absolute/path/to/project/.env"]
+      "args": ["stdio", "--env-file", "/absolute/path/to/project/.env"]
     }
   }
 }
@@ -52,7 +69,7 @@ checkout), use the absolute executable path or wrap with `uv run`:
   "mcpServers": {
     "modal-mcp": {
       "command": "/absolute/path/to/project/.venv/bin/modal-mcp",
-      "args": ["run", "--env-file", "/absolute/path/to/project/.env"]
+      "args": ["stdio", "--env-file", "/absolute/path/to/project/.env"]
     }
   }
 }
@@ -67,14 +84,12 @@ Or with `uv run`:
       "command": "uv",
       "args": [
         "run", "--directory", "/absolute/path/to/project",
-        "modal-mcp", "run", "--env-file", "/absolute/path/to/project/.env"
+        "modal-mcp", "stdio", "--env-file", "/absolute/path/to/project/.env"
       ]
     }
   }
 }
 ```
-
-Restart Claude Code after editing `settings.json`.
 
 ## Codex CLI
 
