@@ -37,9 +37,11 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import IO, Final, Literal, TextIO
+from typing import IO, Final, Literal, TextIO, cast
 
 from modal_mcp.agent_targets.contract import AgentTargetContract
+
+Scope = Literal["user", "project", "local"]
 
 # ---------------------------------------------------------------------------
 # Module-level constants
@@ -49,14 +51,12 @@ CLAUDE_CODE_SERVER_COMMAND: Final[str] = "modal-mcp"
 CLAUDE_CODE_SERVER_NAME: Final[str] = "modal-mcp"
 CLAUDE_CODE_TOP_LEVEL_KEY: Final[str] = "mcpServers"
 CLAUDE_CODE_TRANSPORT: Final[str] = "stdio"
-CLAUDE_CODE_DEFAULT_SCOPE: Final[str] = "user"
+CLAUDE_CODE_DEFAULT_SCOPE: Final[Scope] = "user"
 CLAUDE_CODE_SERVER_ARGS_TEMPLATE: Final[tuple[str, ...]] = (
     "stdio",
     "--env-file",
     "{env_file}",
 )
-
-Scope = Literal["user", "project", "local"]
 
 # ---------------------------------------------------------------------------
 # Exception
@@ -343,7 +343,7 @@ def install_from_cli(
     env_file_arg: str | None = getattr(args, "env_file", None)
     dry_run: bool = getattr(args, "dry_run", False)
     yes: bool = getattr(args, "yes", False)
-    scope: str = getattr(args, "scope", CLAUDE_CODE_DEFAULT_SCOPE)
+    scope: Scope = cast(Scope, getattr(args, "scope", CLAUDE_CODE_DEFAULT_SCOPE))
 
     if env_file_arg is not None:
         resolved_env = Path(env_file_arg).expanduser().absolute()
